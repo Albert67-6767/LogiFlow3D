@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="description" content="Simulador de carregamento 3D com regra LIFO e sequenciamento de rotas.">
+    <meta name="theme-color" content="#020617">
+    <title>LogiFlow 3D – Simulador de Carga e Rotas</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2310b981' stroke-width='2' stroke-linejoin='round'%3E%3Cpath d='M21 8 12 3 3 8v8l9 5 9-5z'/%3E%3Cpath d='m3 8 9 5 9-5M12 13v8'/%3E%3C/svg%3E">
+    <script>
+        // Aplica o tema salvo antes de desenhar a página (evita piscar).
+        (function () {
+            var theme;
+            try { theme = (JSON.parse(localStorage.getItem('logiflow3d:v2') || '{}') || {}).theme; } catch (e) { }
+            if (theme !== 'light' && theme !== 'dark') theme = matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+            document.documentElement.dataset.theme = theme;
+        })();
+    </script>
+</head>
+<body class="flex h-dvh overflow-hidden bg-slate-950 font-sans text-slate-100 antialiased">
+
+    <!-- ===== Menu lateral (fixo em telas grandes, gaveta em telas menores) ===== -->
+    <div id="sidebar-backdrop" class="fixed inset-0 z-30 bg-slate-950/70 backdrop-blur-sm lg:hidden" hidden></div>
+    <aside id="sidebar"
+        class="fixed inset-y-0 left-0 z-40 flex w-72 -translate-x-full flex-col gap-6 overflow-y-auto border-r border-slate-800 bg-slate-900 p-4 transition-transform duration-200 data-[open=true]:translate-x-0 lg:static lg:w-64 lg:translate-x-0">
+
+        <div class="flex items-center gap-3 px-1">
+            <div class="flex size-10 items-center justify-center rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 text-emerald-950 shadow-lg shadow-emerald-500/20">
+                <i data-icon="box" class="size-6"></i>
+            </div>
+            <div class="min-w-0 flex-1">
+                <p class="bg-gradient-to-r from-slate-50 to-slate-400 bg-clip-text text-lg font-bold leading-tight text-transparent">LogiFlow 3D</p>
+                <p class="text-xs font-medium text-emerald-400">Otimizador LIFO &amp; Rotas</p>
+            </div>
+            <button id="btn-close-sidebar" class="icon-btn lg:hidden" aria-label="Fechar menu"><i data-icon="x"></i></button>
+        </div>
+
+        <nav aria-label="Seções" class="space-y-1" role="tablist">
+            <button class="nav-btn" role="tab" data-tab="packing" aria-controls="tab-packing"><i data-icon="package"></i>Empacotamento 3D</button>
+            <button class="nav-btn" role="tab" data-tab="route" aria-controls="tab-route"><i data-icon="route"></i>Sequenciador de Rota</button>
+            <button class="nav-btn" role="tab" data-tab="metrics" aria-controls="tab-metrics"><i data-icon="chart"></i>Métricas &amp; Custos</button>
+        </nav>
+
+        <section aria-labelledby="vehicle-title">
+            <div class="mb-2 flex items-center justify-between">
+                <h2 id="vehicle-title" class="section-title mb-0">Veículo</h2>
+                <button id="btn-add-truck" class="icon-btn text-emerald-400 hover:text-emerald-300" title="Novo veículo" aria-label="Adicionar veículo"><i data-icon="plus"></i></button>
+            </div>
+            <div id="truck-options" class="space-y-1.5" role="radiogroup" aria-labelledby="vehicle-title"></div>
+        </section>
+
+        <section aria-labelledby="data-title" class="mt-auto">
+            <h2 id="data-title" class="section-title">Dados do projeto</h2>
+            <div class="grid grid-cols-2 gap-1.5">
+                <button id="btn-export-json" class="btn-subtle"><i data-icon="download" class="size-3.5"></i>Salvar</button>
+                <button id="btn-import" class="btn-subtle"><i data-icon="upload" class="size-3.5"></i>Abrir</button>
+                <button id="btn-export-csv" class="btn-subtle"><i data-icon="csv" class="size-3.5"></i>CSV</button>
+                <button id="btn-print" class="btn-subtle"><i data-icon="printer" class="size-3.5"></i>Imprimir</button>
+                <button id="btn-reset-sample" class="btn-subtle"><i data-icon="refresh" class="size-3.5"></i>Exemplo</button>
+                <button id="btn-clear" class="btn-subtle hover:!text-red-300"><i data-icon="eraser" class="size-3.5"></i>Limpar</button>
+            </div>
+            <p class="mt-2 text-[11px] leading-snug text-slate-500">"Abrir" aceita projetos .json ou listas .csv (separadas por ponto e vírgula). Tudo é salvo automaticamente neste navegador.</p>
+            <input id="file-input" type="file" accept=".json,.csv,application/json,text/csv" hidden>
+        </section>
+    </aside>
+
+    <!-- ===== Área principal ===== -->
+    <main class="flex min-w-0 flex-1 flex-col">
+
+        <header class="flex shrink-0 items-center gap-3 border-b border-slate-800 bg-slate-900/40 px-3 py-2.5 backdrop-blur sm:px-5">
+            <button id="btn-open-sidebar" class="icon-btn lg:hidden" aria-label="Abrir menu"><i data-icon="menu" class="size-5"></i></button>
+            <div id="header-stats" class="grid min-w-0 flex-1 grid-cols-3 gap-2 sm:gap-6"></div>
+            <button id="btn-theme" class="icon-btn shrink-0" aria-label="Alternar tema claro/escuro"></button>
+            <button id="btn-add-item" class="btn-primary shrink-0" aria-label="Adicionar carga">
+                <i data-icon="plus"></i><span class="hidden sm:inline">Adicionar Carga</span>
+            </button>
+        </header>
+
+        <div class="relative min-h-0 flex-1">
+
+            <!-- ABA 1: EMPACOTAMENTO 3D -->
+            <section id="tab-packing" role="tabpanel" class="absolute inset-0 flex">
+                <div id="canvas-container" class="relative min-w-0 flex-1 bg-slate-950">
+
+                    <div class="overlay absolute left-3 top-3 z-10 flex flex-wrap gap-1 p-1.5">
+                        <button id="btn-toggle-walls" class="seg-btn" aria-pressed="false"></button>
+                        <button id="btn-reset-cam" class="seg-btn"><i data-icon="rotate-ccw" class="size-3.5"></i><span class="hidden sm:inline">Enquadrar</span></button>
+                        <button id="btn-toggle-items" class="seg-btn xl:hidden" aria-controls="items-panel" aria-expanded="false">
+                            <i data-icon="list" class="size-3.5"></i>Itens <span id="items-count-badge" class="font-mono"></span>
+                        </button>
+                    </div>
+
+                    <div id="unplaced-alert" class="absolute right-3 top-3 z-10 max-w-[calc(100%-1.5rem)] sm:max-w-xs" hidden></div>
+
+                    <div class="absolute bottom-3 left-3 right-3 z-10 flex flex-col items-start gap-2 sm:right-auto sm:w-80">
+                        <div id="stop-legend" class="overlay w-full px-3 py-2"></div>
+                        <details id="weight-panel" class="overlay group w-full p-3" open>
+                            <summary class="flex cursor-pointer list-none items-center justify-between text-xs font-semibold uppercase tracking-wider text-slate-300">
+                                <span>Distribuição de Peso</span>
+                                <i data-icon="chevron-down" class="size-4 text-slate-500 transition group-open:rotate-180"></i>
+                            </summary>
+                            <div id="weight-body" class="mt-2"></div>
+                        </details>
+                    </div>
+
+                    <div id="tooltip" class="pointer-events-none fixed z-50 max-w-60 rounded-lg border border-slate-700 bg-slate-900/95 px-3 py-2 text-xs shadow-xl" hidden></div>
+                </div>
+
+                <div id="items-backdrop" class="fixed inset-0 z-20 bg-slate-950/60 xl:hidden" hidden></div>
+                <aside id="items-panel" aria-label="Itens da carga"
+                    class="fixed inset-y-0 right-0 z-30 flex w-80 max-w-[90vw] translate-x-full flex-col border-l border-slate-800 bg-slate-900 transition-transform duration-200 data-[open=true]:translate-x-0 xl:static xl:z-10 xl:max-w-none xl:translate-x-0 xl:bg-slate-900/60">
+                    <div class="flex items-center justify-between gap-2 border-b border-slate-800 p-4">
+                        <h2 class="flex items-center gap-2 text-sm font-semibold text-slate-200">
+                            <i data-icon="boxes" class="size-4 text-emerald-400"></i>
+                            <span>Itens da Carga (<span id="items-count">0</span>)</span>
+                        </h2>
+                        <button id="btn-close-items" class="icon-btn xl:hidden" aria-label="Fechar lista"><i data-icon="x"></i></button>
+                    </div>
+                    <div id="items-list" class="flex-1 space-y-2 overflow-y-auto p-3"></div>
+                </aside>
+            </section>
+
+            <!-- ABA 2: ROTA (mapa em cima no celular/tablet, ao lado em telas largas) -->
+            <section id="tab-route" role="tabpanel" class="absolute inset-0 flex flex-col xl:flex-row" hidden>
+                <div class="relative isolate h-[45%] min-h-56 shrink-0 border-b border-slate-800 xl:h-auto xl:min-w-0 xl:flex-1 xl:border-b-0">
+                    <div id="route-map" class="absolute inset-0" role="region" aria-label="Mapa da rota"></div>
+                    <div id="map-pick-banner" class="overlay absolute left-1/2 top-3 z-[1000] flex w-max max-w-[calc(100%-1.5rem)] -translate-x-1/2 items-center gap-2 px-3 py-2 text-xs text-slate-200" hidden></div>
+                    <div class="absolute right-3 top-3 z-[1000] flex items-start gap-1.5">
+                        <div class="overlay flex gap-0.5 p-1" role="group" aria-label="Tipo de mapa">
+                            <button class="seg-btn px-2.5" data-map-style="map" aria-pressed="true"><i data-icon="map" class="size-3.5"></i>Mapa</button>
+                            <button class="seg-btn px-2.5" data-map-style="satellite" aria-pressed="false"><i data-icon="satellite" class="size-3.5"></i>Satélite</button>
+                        </div>
+                        <button id="btn-fit-map" class="overlay icon-btn" title="Enquadrar rota" aria-label="Enquadrar rota"><i data-icon="maximize"></i></button>
+                    </div>
+                </div>
+                <div id="route-panel" class="min-h-0 flex-1 overflow-y-auto p-3 sm:p-4 xl:w-[27rem] xl:flex-none xl:border-l xl:border-slate-800">
+                    <div class="mx-auto max-w-2xl space-y-3">
+                        <div id="route-controls"></div>
+                        <div id="route-summary"></div>
+                        <ol id="route-stops" class="space-y-2"></ol>
+                        <div id="risk-areas"></div>
+                        <p class="px-1 pb-2 text-[10px] leading-snug text-slate-500">
+                            Mapas e endereços: OpenStreetMap (Nominatim) · Caminhos e piso: Valhalla (FOSSGIS) · Mapa base: OpenStreetMap.
+                            Os endereços são enviados a esses serviços gratuitos para localizar as paradas.
+                        </p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ABA 3: MÉTRICAS -->
+            <section id="tab-metrics" role="tabpanel" class="absolute inset-0 overflow-y-auto p-4 sm:p-6" hidden>
+                <div id="metrics-root" class="mx-auto max-w-4xl space-y-6"></div>
+            </section>
+        </div>
+
+        <!-- Abas embaixo em celular/tablet (alcance do polegar) -->
+        <nav id="bottom-nav" aria-label="Seções" role="tablist"
+            class="flex shrink-0 border-t border-slate-800 bg-slate-900 pb-[env(safe-area-inset-bottom)] lg:hidden">
+            <button class="tab-btn" role="tab" data-tab="packing" aria-controls="tab-packing"><i data-icon="package" class="size-5"></i>Carga 3D</button>
+            <button class="tab-btn" role="tab" data-tab="route" aria-controls="tab-route"><i data-icon="route" class="size-5"></i>Rota</button>
+            <button class="tab-btn" role="tab" data-tab="metrics" aria-controls="tab-metrics"><i data-icon="chart" class="size-5"></i>Custos</button>
+        </nav>
+    </main>
+
+    <!-- ===== Modal de item (adicionar / editar) ===== -->
+    <dialog id="item-dialog" aria-labelledby="item-dialog-title"
+        class="m-auto max-h-[90dvh] w-[calc(100%-2rem)] max-w-lg overflow-y-auto rounded-2xl border border-slate-800 bg-slate-900 p-0 text-slate-100 shadow-2xl backdrop:bg-slate-950/80 backdrop:backdrop-blur-sm">
+        <form id="item-form" method="dialog" class="space-y-4 p-6" novalidate>
+            <div class="flex items-center justify-between">
+                <h3 id="item-dialog-title" class="text-base font-semibold text-slate-200">Adicionar Carga</h3>
+                <button type="button" data-close class="icon-btn" aria-label="Fechar"><i data-icon="x" class="size-5"></i></button>
+            </div>
+
+            <div class="field">
+                <label for="f-label" class="label">Descrição do item / cliente</label>
+                <input id="f-label" name="label" class="input" maxlength="80" placeholder="Ex.: Caixa Eletrônicos – Loja Centro" autocomplete="off">
+                <p class="field-error" data-error="label"></p>
+            </div>
+            <div class="field">
+                <label for="f-address" class="label">Endereço de entrega</label>
+                <input id="f-address" name="address" class="input" maxlength="120" placeholder="Rua, número – Cidade" autocomplete="off">
+                <p class="field-error" data-error="address"></p>
+            </div>
+
+            <fieldset class="grid grid-cols-3 gap-3">
+                <legend class="label mb-1">Dimensões (m)</legend>
+                <div class="field"><label for="f-w" class="sr-only">Largura</label><input id="f-w" name="w" class="input" inputmode="decimal" placeholder="Largura"><p class="field-hint">Largura</p><p class="field-error" data-error="w"></p></div>
+                <div class="field"><label for="f-h" class="sr-only">Altura</label><input id="f-h" name="h" class="input" inputmode="decimal" placeholder="Altura"><p class="field-hint">Altura</p><p class="field-error" data-error="h"></p></div>
+                <div class="field"><label for="f-d" class="sr-only">Profundidade</label><input id="f-d" name="d" class="input" inputmode="decimal" placeholder="Profund."><p class="field-hint">Profundidade</p><p class="field-error" data-error="d"></p></div>
+            </fieldset>
+
+            <div class="grid grid-cols-3 gap-3">
+                <div class="field">
+                    <label for="f-weight" class="label">Peso (kg)</label>
+                    <input id="f-weight" name="weight" class="input" inputmode="decimal">
+                    <p class="field-error" data-error="weight"></p>
+                </div>
+                <div class="field">
+                    <label for="f-stop" class="label">Nº da parada</label>
+                    <input id="f-stop" name="stop" class="input" type="number" min="1" max="99" step="1">
+                    <p class="field-error" data-error="stop"></p>
+                </div>
+                <div class="field" id="quantity-field">
+                    <label for="f-quantity" class="label">Quantidade</label>
+                    <input id="f-quantity" name="quantity" class="input" type="number" min="1" max="50" step="1" value="1">
+                    <p class="field-error" data-error="quantity"></p>
+                </div>
+            </div>
+
+            <label class="flex cursor-pointer items-center gap-2 text-sm text-slate-300">
+                <input name="fragile" type="checkbox" class="size-4 accent-amber-400">
+                Frágil – não empilhar nada sobre este item
+            </label>
+
+            <div id="item-warnings" class="space-y-1"></div>
+
+            <div class="flex justify-end gap-2 pt-2">
+                <button type="button" data-close class="btn-ghost">Cancelar</button>
+                <button type="submit" id="item-submit" class="btn-primary">Adicionar ao Baú</button>
+            </div>
+        </form>
+    </dialog>
+
+    <!-- ===== Modal de veículo (adicionar / editar) ===== -->
+    <dialog id="truck-dialog" aria-labelledby="truck-dialog-title"
+        class="m-auto max-h-[90dvh] w-[calc(100%-2rem)] max-w-md overflow-y-auto rounded-2xl border border-slate-800 bg-slate-900 p-0 text-slate-100 shadow-2xl backdrop:bg-slate-950/80 backdrop:backdrop-blur-sm">
+        <form id="truck-form" method="dialog" class="space-y-4 p-6" novalidate>
+            <div class="flex items-center justify-between">
+                <h3 id="truck-dialog-title" class="text-base font-semibold text-slate-200">Novo Veículo</h3>
+                <button type="button" data-close class="icon-btn" aria-label="Fechar"><i data-icon="x" class="size-5"></i></button>
+            </div>
+
+            <div>
+                <label for="t-name" class="label">Nome</label>
+                <input id="t-name" name="name" class="input" maxlength="40" placeholder="Ex.: Van Sprinter" autocomplete="off">
+                <p class="field-error" data-error="name"></p>
+            </div>
+
+            <fieldset class="grid grid-cols-3 gap-3">
+                <legend class="label mb-1">Medidas internas do baú (m)</legend>
+                <div><label for="t-d" class="sr-only">Comprimento</label><input id="t-d" name="d" class="input" inputmode="decimal"><p class="field-hint">Comprimento</p><p class="field-error" data-error="d"></p></div>
+                <div><label for="t-w" class="sr-only">Largura</label><input id="t-w" name="w" class="input" inputmode="decimal"><p class="field-hint">Largura</p><p class="field-error" data-error="w"></p></div>
+                <div><label for="t-h" class="sr-only">Altura</label><input id="t-h" name="h" class="input" inputmode="decimal"><p class="field-hint">Altura</p><p class="field-error" data-error="h"></p></div>
+            </fieldset>
+
+            <div class="grid grid-cols-3 gap-3">
+                <div>
+                    <label for="t-payload" class="label">Carga máx. (kg)</label>
+                    <input id="t-payload" name="payload" class="input" inputmode="decimal">
+                    <p class="field-error" data-error="payload"></p>
+                </div>
+                <div>
+                    <label for="t-kml" class="label">Consumo (km/L)</label>
+                    <input id="t-kml" name="kmPerLiter" class="input" inputmode="decimal">
+                    <p class="field-error" data-error="kmPerLiter"></p>
+                </div>
+                <div>
+                    <label for="t-fuel" class="label">Combustível</label>
+                    <select id="t-fuel" name="fuel" class="input"></select>
+                    <p class="field-error" data-error="fuel"></p>
+                </div>
+            </div>
+
+            <p id="truck-summary" class="rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2 font-mono text-xs text-slate-400"></p>
+
+            <div class="flex justify-end gap-2 pt-2">
+                <button type="button" data-close class="btn-ghost">Cancelar</button>
+                <button type="submit" id="truck-submit" class="btn-primary">Adicionar veículo</button>
+            </div>
+        </form>
+    </dialog>
+
+    <!-- ===== Modal de área de atenção ===== -->
+    <dialog id="area-dialog" aria-labelledby="area-dialog-title"
+        class="m-auto max-h-[90dvh] w-[calc(100%-2rem)] max-w-sm overflow-y-auto rounded-2xl border border-slate-800 bg-slate-900 p-0 text-slate-100 shadow-2xl backdrop:bg-slate-950/80 backdrop:backdrop-blur-sm">
+        <form id="area-form" method="dialog" class="space-y-4 p-5" novalidate>
+            <div class="flex items-center justify-between">
+                <h3 id="area-dialog-title" class="text-base font-semibold text-slate-200">Área de atenção</h3>
+                <button type="button" data-close class="icon-btn" aria-label="Fechar"><i data-icon="x" class="size-5"></i></button>
+            </div>
+            <div>
+                <label for="a-name" class="label">Nome (bairro, comunidade, trecho…)</label>
+                <input id="a-name" name="name" class="input" maxlength="60" placeholder="Ex.: Bairro X – evitar à noite" autocomplete="off">
+                <p class="field-error" data-error="name"></p>
+            </div>
+            <fieldset>
+                <legend class="label">Nível</legend>
+                <div id="a-levels" class="grid grid-cols-3 gap-1.5"></div>
+            </fieldset>
+            <div>
+                <label for="a-radius" class="label">Raio da área (metros)</label>
+                <input id="a-radius" name="radius" class="input font-mono" type="number" min="50" max="20000" step="50">
+                <p class="field-error" data-error="radius"></p>
+            </div>
+            <div class="flex flex-wrap justify-end gap-2 pt-1">
+                <button type="button" id="area-delete" class="btn-ghost mr-auto hover:!text-red-400">Remover</button>
+                <button type="button" data-close class="btn-ghost">Cancelar</button>
+                <button type="submit" class="btn-primary">Salvar</button>
+            </div>
+        </form>
+    </dialog>
+
+    <!-- ===== Navigation (full screen) ===== -->
+
+    <div id="nav-screen" class="fixed inset-0 z-[1200] flex flex-col bg-slate-950 text-slate-100" role="dialog" aria-label="Navegação" hidden></div>
+
+
+    <div id="toasts" class="pointer-events-none fixed bottom-20 left-1/2 z-[1300] flex w-[min(92vw,24rem)] -translate-x-1/2 flex-col gap-2 sm:left-auto sm:right-4 sm:translate-x-0 lg:bottom-4" aria-live="polite"></div>
+
+    <!-- Relatório gerado só na impressão -->
+    <div id="print-report"></div>
+
+    <script type="module" src="/src/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,177 @@
+@import "tailwindcss";
+
+/*
+ * Tema claro: o app foi desenhado com a escala "slate" escura. No tema claro a
+ * escala é invertida (fundo claro, texto escuro) e os tons de destaque claros
+ * (300/400), usados em textos, ficam mais escuros para manter o contraste.
+ * Assim nenhuma tela precisa de classes duplicadas.
+ */
+:root[data-theme="light"] {
+    color-scheme: light;
+    --color-slate-50: oklch(12.9% 0.042 264.695);
+    --color-slate-100: oklch(20.8% 0.042 265.755);
+    --color-slate-200: oklch(27.9% 0.041 260.031);
+    --color-slate-300: oklch(37.2% 0.044 257.287);
+    --color-slate-400: oklch(44.6% 0.043 257.281);
+    --color-slate-500: oklch(52% 0.046 257.417);
+    --color-slate-600: oklch(66% 0.04 256.788);
+    --color-slate-700: oklch(86.9% 0.022 252.894);
+    --color-slate-800: oklch(91.5% 0.013 255.508);
+    --color-slate-900: oklch(100% 0 0);
+    --color-slate-950: oklch(96.8% 0.007 247.896);
+    --color-emerald-300: oklch(50.8% 0.118 165.612);
+    --color-emerald-400: oklch(56% 0.13 163.225);
+    --color-amber-300: oklch(52% 0.15 48.998);
+    --color-amber-400: oklch(60% 0.17 58.318);
+    --color-red-300: oklch(50.5% 0.213 27.518);
+    --color-red-400: oklch(55% 0.23 27.325);
+    --color-blue-400: oklch(54.6% 0.245 262.881);
+    --scroll-track: oklch(96.8% 0.007 247.896);
+    --scroll-thumb: oklch(80% 0.02 252);
+}
+:root {
+    color-scheme: dark;
+    --scroll-track: rgb(15 23 42 / 0.6);
+    --scroll-thumb: rgb(51 65 85 / 0.6);
+}
+
+/* Componentes reutilizáveis: mude o visual aqui, não em cada tela. */
+@utility btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm transition
+        focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400
+        disabled:cursor-not-allowed disabled:opacity-50;
+}
+@utility btn-primary {
+    @apply btn bg-emerald-500 font-semibold text-emerald-950 shadow-lg shadow-emerald-500/20 hover:brightness-110;
+}
+@utility btn-ghost {
+    @apply btn font-medium text-slate-400 hover:bg-slate-800 hover:text-slate-200;
+}
+@utility btn-subtle {
+    @apply inline-flex items-center gap-1.5 rounded-lg border border-slate-700/60 bg-slate-800/50 px-2.5 py-1.5 text-xs font-medium text-slate-300 transition
+        hover:border-slate-600 hover:bg-slate-800 hover:text-slate-100
+        focus-visible:outline-2 focus-visible:outline-emerald-400;
+}
+@utility icon-btn {
+    @apply inline-flex items-center justify-center rounded-md p-1.5 text-slate-400 transition pointer-coarse:p-2.5
+        hover:bg-slate-800 hover:text-slate-200 focus-visible:outline-2 focus-visible:outline-emerald-400;
+}
+@utility seg-btn {
+    @apply inline-flex items-center gap-1.5 rounded-lg border border-transparent px-3 py-1.5 text-xs font-medium text-slate-400 transition pointer-coarse:py-2.5
+        hover:bg-slate-800 hover:text-slate-200
+        aria-pressed:border-slate-700 aria-pressed:bg-slate-800 aria-pressed:text-slate-100
+        focus-visible:outline-2 focus-visible:outline-emerald-400;
+}
+@utility nav-btn {
+    @apply flex w-full items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 text-sm font-medium text-slate-400 transition
+        hover:bg-slate-800/60 hover:text-slate-200
+        aria-selected:border-emerald-500/20 aria-selected:bg-emerald-500/10 aria-selected:text-emerald-400
+        focus-visible:outline-2 focus-visible:outline-emerald-400;
+}
+@utility truck-option {
+    @apply w-full rounded-xl border border-slate-700/60 bg-slate-800/40 p-2.5 text-left transition
+        hover:border-slate-600 hover:bg-slate-800
+        aria-checked:border-emerald-500/40 aria-checked:bg-emerald-500/10
+        focus-visible:outline-2 focus-visible:outline-emerald-400;
+}
+@utility section-title {
+    @apply mb-2 px-1 text-[11px] font-semibold uppercase tracking-wider text-slate-500;
+}
+@utility card {
+    @apply rounded-xl border border-slate-800 bg-slate-900;
+}
+@utility overlay {
+    @apply rounded-xl border border-slate-800 bg-slate-900/85 shadow-xl backdrop-blur;
+}
+@utility chip {
+    @apply inline-flex items-center gap-1 rounded px-1.5 py-0.5 font-mono text-[10px] font-medium;
+}
+@utility label {
+    @apply mb-1 block text-xs font-medium text-slate-400;
+}
+@utility input {
+    /* 16px no celular evita o zoom automático do iPhone ao tocar no campo */
+    @apply w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-base text-slate-200 placeholder:text-slate-600 sm:text-sm
+        focus:border-emerald-500 focus:outline-none aria-[invalid=true]:border-red-500;
+}
+@utility field-hint {
+    @apply mt-1 text-[10px] text-slate-500;
+}
+@utility field-error {
+    @apply mt-1 text-[11px] text-red-400 empty:hidden;
+}
+@utility stat-label {
+    @apply truncate text-[10px] font-medium uppercase tracking-wider text-slate-400 sm:text-xs;
+}
+@utility toast {
+    @apply pointer-events-auto flex items-center gap-2 rounded-lg border bg-slate-900/95 px-3 py-2 text-xs shadow-2xl backdrop-blur;
+}
+@utility bar {
+    @apply flex h-2 w-full overflow-hidden rounded-full bg-slate-800;
+}
+
+/* Barras de rolagem discretas */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--scroll-track); }
+::-webkit-scrollbar-thumb { background: var(--scroll-thumb); border-radius: 3px; }
+
+/* Barra de abas inferior (celular/tablet) */
+@utility tab-btn {
+    @apply flex flex-1 flex-col items-center gap-0.5 py-2 text-[11px] font-medium text-slate-400 transition
+        aria-selected:text-emerald-400 focus-visible:outline-2 focus-visible:outline-emerald-400;
+}
+
+/* ===== Mapa (Leaflet) acompanhando o tema ===== */
+.leaflet-container { background: var(--color-slate-950); font: inherit; }
+.leaflet-bar a, .leaflet-bar a:hover {
+    background: var(--color-slate-900); color: var(--color-slate-200); border-color: var(--color-slate-800);
+}
+.leaflet-bar { border-color: var(--color-slate-800) !important; }
+.leaflet-control-attribution {
+    background: color-mix(in oklab, var(--color-slate-900) 80%, transparent) !important;
+    color: var(--color-slate-400) !important; font-size: 10px;
+}
+.leaflet-control-attribution a { color: var(--color-slate-300) !important; }
+.leaflet-tooltip {
+    background: var(--color-slate-900); color: var(--color-slate-200); border: 1px solid var(--color-slate-700);
+    border-radius: 8px; box-shadow: 0 8px 24px rgb(0 0 0 / 0.25); font-size: 12px;
+}
+.leaflet-tooltip-top::before { border-top-color: var(--color-slate-700); }
+.map-pin {
+    display: flex; align-items: center; justify-content: center; border-radius: 9999px;
+    font: 700 12px/1 ui-monospace, monospace; color: #fff; border: 2px solid #fff;
+    box-shadow: 0 2px 8px rgb(0 0 0 / 0.35);
+}
+.map-picking .leaflet-container { cursor: crosshair; }
+/* Tema escuro do mapa: inverte só os blocos do mapa base, não rotas e marcadores */
+.map-dark .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(0.9) contrast(0.85) saturate(0.6); }
+
+#canvas-container canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    outline: none;
+    touch-action: none;
+}
+
+[hidden] { display: none !important; }
+
+/* ===== Impressão: só o relatório ===== */
+#print-report { display: none; }
+
+@media print {
+    @page { margin: 14mm; }
+    body { display: block !important; height: auto !important; overflow: visible !important; background: #fff !important; color: #0f172a !important; }
+    body > *:not(#print-report) { display: none !important; }
+    #print-report { display: block !important; font-size: 11px; }
+    #print-report h1 { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
+    #print-report h2 { font-size: 13px; font-weight: 600; margin: 16px 0 6px; }
+    #print-report img { max-width: 100%; max-height: 90mm; border: 1px solid #cbd5e1; border-radius: 6px; }
+    #print-report table { width: 100%; border-collapse: collapse; }
+    #print-report th, #print-report td { border: 1px solid #cbd5e1; padding: 4px 6px; text-align: left; }
+    #print-report th { background: #f1f5f9; }
+    #print-report .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+}
+
+/* Durante a navegação os avisos sobem para não cobrir os botões de baixo */
+body:has(#nav-screen:not([hidden])) #toasts { bottom: auto; top: 9.5rem; }
