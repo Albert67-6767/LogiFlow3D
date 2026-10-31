@@ -5,15 +5,27 @@
  * Medidas internas do baú em metros.
  */
 export const DEFAULT_TRUCKS = {
-    fiorino: { name: 'Fiorino / Van', w: 1.8, h: 1.3, d: 2.4, payload: 650, kmPerLiter: 11, fuel: 'gasolina' },
-    hr: { name: 'Caminhão HR (VUC)', w: 1.8, h: 1.9, d: 3.1, payload: 1800, kmPerLiter: 8, fuel: 'diesel' },
-    toco: { name: 'Baú Toco', w: 2.4, h: 2.5, d: 6.5, payload: 5000, kmPerLiter: 5, fuel: 'diesel' },
+    fiorino: { name: 'Fiorino / Van', w: 1.8, h: 1.3, d: 2.4, payload: 650, kmPerLiter: 11, fuel: 'gasolina', cabin: 'van' },
+    hr: { name: 'Caminhão HR (VUC)', w: 1.8, h: 1.9, d: 3.1, payload: 1800, kmPerLiter: 8, fuel: 'diesel', cabin: 'vuc' },
+    toco: { name: 'Baú Toco', w: 2.4, h: 2.5, d: 6.5, payload: 5000, kmPerLiter: 5, fuel: 'diesel', cabin: 'caminhao' },
 };
 
 /** kg de CO2 emitidos por litro queimado. As chaves são os combustíveis aceitos. */
 export const CO2_PER_LITER = { diesel: 2.68, gasolina: 2.31 };
 
 export const FUEL_LABELS = { diesel: 'Diesel', gasolina: 'Gasolina / Flex' };
+
+/** Tipos de cabine desenhados no 3D (scene/cabin.js). "auto" escolhe pela carga máxima. */
+export const CABIN_TYPES = {
+    auto: 'Automático (pela carga)',
+    caminhao: 'Caminhão (toco/truck)',
+    vuc: 'Caminhão leve (VUC)',
+    van: 'Van / furgão',
+    picape: 'Picape',
+    suv: 'SUV / utilitário',
+    sedan: 'Carro sedan',
+    hatch: 'Carro hatch',
+};
 
 /** Limites aceitos no cadastro de veículos: [mínimo, máximo]. */
 export const TRUCK_LIMITS = {

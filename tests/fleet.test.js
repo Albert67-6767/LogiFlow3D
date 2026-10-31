@@ -9,7 +9,7 @@ const van = { name: 'Van Grande', w: '1,9', h: '1,8', d: '3,5', payload: '1500',
 describe('regras da frota', () => {
     it('valida e normaliza (vírgula decimal)', () => {
         const { value } = validateTruck(van);
-        expect(value).toEqual({ name: 'Van Grande', w: 1.9, h: 1.8, d: 3.5, payload: 1500, kmPerLiter: 9, fuel: 'diesel' });
+        expect(value).toEqual({ name: 'Van Grande', w: 1.9, h: 1.8, d: 3.5, payload: 1500, kmPerLiter: 9, fuel: 'diesel', cabin: 'auto' });
     });
 
     it('aponta cada campo inválido', () => {

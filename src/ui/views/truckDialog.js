@@ -1,4 +1,4 @@
-import { FUEL_LABELS } from '../../config/constants.js';
+import { CABIN_TYPES, FUEL_LABELS } from '../../config/constants.js';
 import { validateTruck } from '../../core/fleet.js';
 import { actions, getState } from '../../state/store.js';
 import { $, h, render } from '../dom.js';
@@ -6,8 +6,8 @@ import { bindDialogClose, decimal, focusFirstError, showErrors } from '../form.j
 import { num } from '../format.js';
 import { toast } from '../toast.js';
 
-const DEFAULTS = { name: '', w: 1.8, h: 1.8, d: 3, payload: 1500, kmPerLiter: 9, fuel: 'diesel' };
-const FIELDS = ['name', 'w', 'h', 'd', 'payload', 'kmPerLiter', 'fuel'];
+const DEFAULTS = { name: '', w: 1.8, h: 1.8, d: 3, payload: 1500, kmPerLiter: 9, fuel: 'diesel', cabin: 'auto' };
+const FIELDS = ['name', 'w', 'h', 'd', 'payload', 'kmPerLiter', 'fuel', 'cabin'];
 
 let editingId = null;
 
@@ -33,6 +33,7 @@ export function openTruckDialog(id = null) {
     f.elements.name.value = v.name;
     for (const k of ['w', 'h', 'd', 'payload', 'kmPerLiter']) f.elements[k].value = decimal(v[k]);
     f.elements.fuel.value = v.fuel;
+    f.elements.cabin.value = v.cabin ?? 'auto';
 
     $('#truck-dialog-title').textContent = id ? 'Editar Veículo' : 'Novo Veículo';
     $('#truck-submit').textContent = id ? 'Salvar alterações' : 'Adicionar veículo';
@@ -51,6 +52,7 @@ function close() {
 export function mountTruckDialog() {
     const f = form();
     render(f.elements.fuel, Object.entries(FUEL_LABELS).map(([value, label]) => h('option', { value }, label)));
+    render(f.elements.cabin, Object.entries(CABIN_TYPES).map(([value, label]) => h('option', { value }, label)));
 
     bindDialogClose(dialog(), close);
     f.addEventListener('input', updateSummary);

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { colorForStop } from '../config/constants.js';
+import { buildCabin } from './cabin.js';
 
 /*
  * Cena 3D do baú. Recebe dados já calculados (posições do packer) e só desenha.
@@ -15,12 +16,14 @@ const THEMES = {
         background: 0x020617, grid: [0x334155, 0x1e293b], ground: 0x1e293b,
         wall: 0x0284c7, wallEdge: 0x38bdf8, floor: 0x334155, cabin: 0x1e293b,
         door: 0x10b981, doorLabel: "#34d399", cabinLabel: "#94a3b8",
+        cabinBody: 0x64748b, glass: 0x0b1220, trim: 0x111827, tire: 0x0a0a0a, rim: 0x9ca3af,
         edge: 0x020617, edgeFragile: 0xfbbf24, edgeSelected: 0xffffff, cog: 0xef4444,
     },
     light: {
         background: 0xf1f5f9, grid: [0xcbd5e1, 0xe2e8f0], ground: 0xcbd5e1,
         wall: 0x0284c7, wallEdge: 0x0369a1, floor: 0x94a3b8, cabin: 0x64748b,
         door: 0x059669, doorLabel: "#047857", cabinLabel: "#475569",
+        cabinBody: 0xf8fafc, glass: 0x1e293b, trim: 0x334155, tire: 0x1f2937, rim: 0xd1d5db,
         edge: 0x0f172a, edgeFragile: 0xd97706, edgeSelected: 0x0f172a, cog: 0xdc2626,
     },
 };
@@ -54,8 +57,9 @@ function makeLabel(text, color) {
     ctx.fillText(text, 128, 32);
     const texture = new THREE.CanvasTexture(canvas);
     texture.colorSpace = THREE.SRGBColorSpace;
-    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: true, depthWrite: false }));
+    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: true, depthWrite: false, depthTest: false }));
     sprite.scale.set(1.2, 0.3, 1);
+    sprite.renderOrder = 10; // sempre por cima do veículo
     sprite.userData.sharedGeometry = true; // a geometria dos sprites é global no Three.js
     return sprite;
 }
@@ -85,10 +89,11 @@ export function createScene(container, { onHover, onSelect } = {}) {
     scene.add(sun);
 
     let grid = null;
+    let groundLift = 0; // altura do piso do baú em relação ao chão
     function makeGrid() {
         if (grid) { scene.remove(grid); grid.geometry.dispose(); grid.material.dispose(); }
         grid = new THREE.GridHelper(30, 60, ...COLORS.grid);
-        grid.position.y = -0.06;
+        grid.position.y = -groundLift - 0.01; // o chão fica abaixo das rodas
         scene.add(grid);
     }
     makeGrid();
@@ -116,6 +121,7 @@ export function createScene(container, { onHover, onSelect } = {}) {
     cogGroup.visible = false;
 
     let truck = null;
+    let cabinSize = { length: 0, height: 0, width: 0 }; // para enquadrar o veículo inteiro
     let wallsOpaqueNow = false;
     let hoveredId = null;
     let selectedId = null;
@@ -151,7 +157,7 @@ export function createScene(container, { onHover, onSelect } = {}) {
 
     // ---------- Construção ----------
     function setTruck(t, wallsOpaque) {
-        const changed = !truck || truck.w !== t.w || truck.h !== t.h || truck.d !== t.d;
+        const changed = !truck || truck.w !== t.w || truck.h !== t.h || truck.d !== t.d || truck.cabin !== t.cabin;
         truck = t;
         wallsOpaqueNow = wallsOpaque;
         clearGroup(truckGroup);
@@ -173,13 +179,12 @@ export function createScene(container, { onHover, onSelect } = {}) {
         const floor = new THREE.Mesh(new THREE.BoxGeometry(t.w, 0.05, t.d), new THREE.MeshStandardMaterial({ color: COLORS.floor, roughness: 0.9 }));
         floor.position.y = -0.025;
 
-        // Cabine à frente (z negativo) para dar orientação.
-        const cabinDepth = Math.min(1.4, t.d * 0.35);
-        const cabin = new THREE.Mesh(
-            new THREE.BoxGeometry(t.w * 0.95, t.h * 0.75, cabinDepth),
-            new THREE.MeshStandardMaterial({ color: COLORS.cabin, roughness: 0.6 }),
-        );
-        cabin.position.set(0, (t.h * 0.75) / 2, -t.d / 2 - cabinDepth / 2 - 0.1);
+        // Cabine à frente (z negativo), no estilo do tipo de veículo.
+        const cabin = buildCabin(t, COLORS);
+        cabin.group.position.z += -t.d / 2 - 0.04;
+        cabin.under.position.z = -0.04;
+        cabinSize = { length: cabin.length + 0.04, height: cabin.height, width: cabin.width };
+        if (groundLift !== cabin.lift) { groundLift = cabin.lift; makeGrid(); }
 
         // Moldura da porta (traseira).
         const doorFrame = new THREE.LineSegments(
@@ -191,9 +196,9 @@ export function createScene(container, { onHover, onSelect } = {}) {
         const doorLabel = makeLabel('PORTA', COLORS.doorLabel);
         doorLabel.position.set(0, t.h + 0.25, t.d / 2);
         const cabinLabel = makeLabel('CABINE', COLORS.cabinLabel);
-        cabinLabel.position.set(0, t.h * 0.75 + 0.25, -t.d / 2 - cabinDepth / 2);
+        cabinLabel.position.set(0, cabin.height + 0.4, -t.d / 2 - cabin.length / 2);
 
-        truckGroup.add(walls, edges, floor, cabin, doorFrame, doorLabel, cabinLabel);
+        truckGroup.add(walls, edges, floor, cabin.group, cabin.under, doorFrame, doorLabel, cabinLabel);
 
         if (changed) fitCamera();
         requestRender();
@@ -262,9 +267,13 @@ export function createScene(container, { onHover, onSelect } = {}) {
         if (!truck) return;
         // Em telas estreitas (retrato) afasta a câmera para o baú caber na largura.
         const narrow = Math.max(1, 1.3 / camera.aspect);
-        const size = Math.max(truck.d + 1.5, truck.w * 2, truck.h * 2) * narrow;
-        controls.target.set(0, truck.h / 2, 0);
-        camera.position.set(size * 0.75, truck.h + size * 0.45, size * 0.9);
+        const length = truck.d + cabinSize.length;
+        const height = Math.max(truck.h, cabinSize.height) + groundLift;
+        const width = Math.max(truck.w, cabinSize.width);
+        const size = Math.max(length + 1.5, width * 2, height * 2) * narrow;
+        const centerZ = -cabinSize.length / 2; // baú + cabine
+        controls.target.set(0, height / 2 - groundLift, centerZ);
+        camera.position.set(size * 0.75, height - groundLift + size * 0.45, centerZ + size * 0.9);
         controls.update();
         requestRender();
     }

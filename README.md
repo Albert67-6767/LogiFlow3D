@@ -49,6 +49,10 @@ const desfazer = actions.removeTruck(id); // Error se for o último veículo
 
 Dados inválidos lançam `ValidationError` com `errors` por campo. Limites em `TRUCK_LIMITS` (`src/config/constants.js`). As regras estão em `src/core/fleet.js` como funções puras, então podem ser reaproveitadas num servidor (API REST) quando houver back-end.
 
+### Cabine no 3D
+
+Cada veículo tem um campo **Cabine**: Caminhão (toco/truck), Caminhão leve (VUC), Van (furgão), Picape, SUV, Sedan ou Hatch. Todos têm rodas (rodado duplo atrás nos caminhões) e altura do chão de acordo com o tipo (`RUNNING` em `cabin.js`). Em "Automático" o tipo sai da carga máxima (até 1.000 kg van, até 3.000 kg VUC, acima caminhão). São formas simples feitas no código (`src/scene/cabin.js`), sem arquivos 3D; para um novo tipo, acrescente um perfil lateral em `profile()` e o nome em `CABIN_TYPES`.
+
 ## Rota no mapa
 
 Aba **Rota**: informe a base de saída e clique em **Calcular melhor rota**. Para cada trecho (base → #1 → #2 …) o sistema busca até 3 caminhos e escolhe o de menor "custo", somando:

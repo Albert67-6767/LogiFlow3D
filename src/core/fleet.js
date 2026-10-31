@@ -1,11 +1,11 @@
-import { CO2_PER_LITER, DEFAULT_TRUCKS, TRUCK_LIMITS } from '../config/constants.js';
+import { CABIN_TYPES, CO2_PER_LITER, DEFAULT_TRUCKS, TRUCK_LIMITS } from '../config/constants.js';
 import { toNumber } from './validation.js';
 
 /*
  * Regras da frota de veículos. Funções puras: recebem e devolvem objetos,
  * sem tela nem armazenamento, para poderem ser reaproveitadas num servidor.
  *
- * Frota = objeto { [id]: { name, w, h, d, payload, kmPerLiter, fuel } }.
+ * Frota = objeto { [id]: { name, w, h, d, payload, kmPerLiter, fuel, cabin } }.
  */
 
 export const defaultFleet = () => structuredClone(DEFAULT_TRUCKS);
@@ -37,6 +37,10 @@ export function validateTruck(raw, fleet = {}, ignoreId = null) {
     const fuel = String(raw.fuel ?? '');
     if (!(fuel in CO2_PER_LITER)) errors.fuel = 'Combustível inválido.';
     value.fuel = fuel;
+
+    // Tipo de cabine é só visual: valor desconhecido (ou arquivo antigo) vira "auto".
+    const cabin = String(raw.cabin ?? 'auto');
+    value.cabin = cabin in CABIN_TYPES ? cabin : 'auto';
 
     return Object.keys(errors).length ? { value: null, errors } : { value, errors };
 }
