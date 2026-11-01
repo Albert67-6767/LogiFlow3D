@@ -157,12 +157,31 @@
 [hidden] { display: none !important; }
 
 /* ===== Impressão: só o relatório ===== */
-#print-report { display: none; }
+#print-report, #print-labels { display: none; }
+
+/* Etiquetas: folha A4 com 3 × 8 etiquetas de 63,5 × 33,9 mm. */
+@page labels { size: A4; margin: 12.9mm 7.2mm; }
 
 @media print {
     @page { margin: 14mm; }
     body { display: block !important; height: auto !important; overflow: visible !important; background: #fff !important; color: #0f172a !important; }
-    body > *:not(#print-report) { display: none !important; }
+    body > *:not(#print-report):not(#print-labels) { display: none !important; }
+    body[data-print="labels"] #print-report { display: none !important; }
+    body[data-print="labels"] #print-labels {
+        display: grid !important; page: labels;
+        grid-template-columns: repeat(3, 63.5mm); grid-auto-rows: 33.9mm; column-gap: 2.5mm;
+        color: #000; font-family: system-ui, sans-serif;
+    }
+    #print-labels .label-card {
+        display: flex; gap: 2mm; align-items: center; padding: 2mm 2.5mm; overflow: hidden;
+        break-inside: avoid; box-sizing: border-box;
+    }
+    #print-labels .label-card svg { width: 26mm; height: 26mm; flex: none; }
+    #print-labels .label-text { min-width: 0; display: flex; flex-direction: column; gap: 0.6mm; line-height: 1.15; }
+    #print-labels .label-name { font-size: 8.5pt; font-weight: 700; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    #print-labels .label-code { font-family: ui-monospace, monospace; font-size: 8pt; letter-spacing: 0.02em; }
+    #print-labels .label-meta { font-size: 7pt; color: #333; }
+    #print-labels .label-fragile { align-self: flex-start; font-size: 7pt; font-weight: 700; border: 1px solid #000; padding: 0 1mm; border-radius: 1mm; }
     #print-report { display: block !important; font-size: 11px; }
     #print-report h1 { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
     #print-report h2 { font-size: 13px; font-weight: 600; margin: 16px 0 6px; }

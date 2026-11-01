@@ -1,5 +1,6 @@
 import { sanitizeFleet, defaultFleet } from './fleet.js';
 import { validateItem } from './validation.js';
+import { sanitizeProducts } from './products.js';
 
 const SCHEMA = 'logiflow3d';
 const VERSION = 2;
@@ -22,6 +23,7 @@ export function exportProject(state) {
         depot: state.depot,
         riskAreas: state.riskAreas,
         geo: state.geo,
+        products: state.products,
     }, null, 2);
 }
 
@@ -44,6 +46,7 @@ export function importProject(text) {
         depot: sanitizeDepot(data.depot),
         riskAreas: sanitizeAreas(data.riskAreas),
         geo: sanitizeGeo(data.geo),
+        products: data.products ? sanitizeProducts(data.products) : undefined,
     };
 }
 

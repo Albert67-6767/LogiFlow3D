@@ -53,6 +53,18 @@ Dados inválidos lançam `ValidationError` com `errors` por campo. Limites em `T
 
 Cada veículo tem um campo **Cabine**: Caminhão (toco/truck), Caminhão leve (VUC), Van (furgão), Picape, SUV, Sedan ou Hatch. Todos têm rodas (rodado duplo atrás nos caminhões) e altura do chão de acordo com o tipo (`RUNNING` em `cabin.js`). Em "Automático" o tipo sai da carga máxima (até 1.000 kg van, até 3.000 kg VUC, acima caminhão). São formas simples feitas no código (`src/scene/cabin.js`), sem arquivos 3D; para um novo tipo, acrescente um perfil lateral em `profile()` e o nome em `CABIN_TYPES`.
 
+## Produtos, código de barras e etiquetas
+
+Aba **Produtos & Etiquetas**: cadastre cada produto uma vez (código, nome, medidas, peso, frágil). Depois, **Ler código** (no topo ou dentro de "Adicionar Carga") abre a câmera; ao ler, a carga já vem preenchida e falta só o endereço/parada. Código ainda não cadastrado abre o cadastro na hora.
+
+- Lê EAN/UPC (código de barras do fabricante), Code 128/39, ITF, QR code e Data Matrix.
+- Produto sem código: **Gerar** cria um código interno (`LF-########`) e **Etiquetas** imprime QR code + nome + medidas em folha A4 de 3 × 8 etiquetas (63,5 × 33,9 mm).
+- Leitor USB/Bluetooth também funciona: ele "digita" o código no campo da janela de leitura.
+- A câmera só abre em `https` ou `localhost`. O leitor nativo do navegador é usado quando existe (Chrome no Android); nos demais é carregado um leitor gratuito (ZXing, biblioteca `barcode-detector`) na primeira leitura, que precisa de internet.
+- O catálogo é salvo no navegador e vai junto no projeto .json.
+
+Código: `core/products.js` (regras, testadas), `ui/scanner.js` (câmera) e `ui/views/productsView.js` (tela e etiquetas).
+
 ## Rota no mapa
 
 Aba **Rota**: informe a base de saída e clique em **Calcular melhor rota**. Para cada trecho (base → #1 → #2 …) o sistema busca até 3 caminhos e escolhe o de menor "custo", somando:

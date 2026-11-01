@@ -39,6 +39,7 @@
             <button class="nav-btn" role="tab" data-tab="packing" aria-controls="tab-packing"><i data-icon="package"></i>Empacotamento 3D</button>
             <button class="nav-btn" role="tab" data-tab="route" aria-controls="tab-route"><i data-icon="route"></i>Sequenciador de Rota</button>
             <button class="nav-btn" role="tab" data-tab="metrics" aria-controls="tab-metrics"><i data-icon="chart"></i>Métricas &amp; Custos</button>
+            <button class="nav-btn" role="tab" data-tab="products" aria-controls="tab-products"><i data-icon="tag"></i>Produtos &amp; Etiquetas</button>
         </nav>
 
         <section aria-labelledby="vehicle-title">
@@ -71,6 +72,9 @@
             <button id="btn-open-sidebar" class="icon-btn lg:hidden" aria-label="Abrir menu"><i data-icon="menu" class="size-5"></i></button>
             <div id="header-stats" class="grid min-w-0 flex-1 grid-cols-3 gap-2 sm:gap-6"></div>
             <button id="btn-theme" class="icon-btn shrink-0" aria-label="Alternar tema claro/escuro"></button>
+            <button id="btn-scan" class="btn-ghost shrink-0 border border-slate-700" aria-label="Ler código de barras ou QR code" title="Ler código de barras ou QR code">
+                <i data-icon="scan"></i><span class="hidden md:inline">Ler código</span>
+            </button>
             <button id="btn-add-item" class="btn-primary shrink-0" aria-label="Adicionar carga">
                 <i data-icon="plus"></i><span class="hidden sm:inline">Adicionar Carga</span>
             </button>
@@ -147,6 +151,11 @@
                 </div>
             </section>
 
+            <!-- ABA 4: PRODUTOS E ETIQUETAS -->
+            <section id="tab-products" role="tabpanel" class="absolute inset-0 overflow-y-auto p-3 sm:p-6" hidden>
+                <div id="products-root" class="mx-auto max-w-4xl space-y-4"></div>
+            </section>
+
             <!-- ABA 3: MÉTRICAS -->
             <section id="tab-metrics" role="tabpanel" class="absolute inset-0 overflow-y-auto p-4 sm:p-6" hidden>
                 <div id="metrics-root" class="mx-auto max-w-4xl space-y-6"></div>
@@ -159,6 +168,7 @@
             <button class="tab-btn" role="tab" data-tab="packing" aria-controls="tab-packing"><i data-icon="package" class="size-5"></i>Carga 3D</button>
             <button class="tab-btn" role="tab" data-tab="route" aria-controls="tab-route"><i data-icon="route" class="size-5"></i>Rota</button>
             <button class="tab-btn" role="tab" data-tab="metrics" aria-controls="tab-metrics"><i data-icon="chart" class="size-5"></i>Custos</button>
+            <button class="tab-btn" role="tab" data-tab="products" aria-controls="tab-products"><i data-icon="tag" class="size-5"></i>Produtos</button>
         </nav>
     </main>
 
@@ -170,6 +180,10 @@
                 <h3 id="item-dialog-title" class="text-base font-semibold text-slate-200">Adicionar Carga</h3>
                 <button type="button" data-close class="icon-btn" aria-label="Fechar"><i data-icon="x" class="size-5"></i></button>
             </div>
+
+            <button type="button" id="item-scan" class="btn-subtle w-full justify-center py-2.5">
+                <i data-icon="scan" class="size-4"></i>Preencher lendo o código do produto
+            </button>
 
             <div class="field">
                 <label for="f-label" class="label">Descrição do item / cliente</label>
@@ -275,6 +289,95 @@
         </form>
     </dialog>
 
+    <!-- ===== Modal de produto (cadastro) ===== -->
+    <dialog id="product-dialog" aria-labelledby="product-dialog-title"
+        class="m-auto max-h-[90dvh] w-[calc(100%-2rem)] max-w-md overflow-y-auto rounded-2xl border border-slate-800 bg-slate-900 p-0 text-slate-100 shadow-2xl backdrop:bg-slate-950/80 backdrop:backdrop-blur-sm">
+        <form id="product-form" method="dialog" class="space-y-4 p-6" novalidate>
+            <div class="flex items-center justify-between">
+                <h3 id="product-dialog-title" class="text-base font-semibold text-slate-200">Novo Produto</h3>
+                <button type="button" data-close class="icon-btn" aria-label="Fechar"><i data-icon="x" class="size-5"></i></button>
+            </div>
+            <p id="product-notice" class="rounded-lg border border-amber-500/30 bg-amber-500/10 p-2.5 text-xs text-amber-300" hidden></p>
+
+            <div>
+                <label for="p-code" class="label">Código de barras / QR</label>
+                <div class="flex gap-1.5">
+                    <input id="p-code" name="code" class="input flex-1 font-mono uppercase" maxlength="40" placeholder="Ex.: 7891234567895" autocomplete="off" spellcheck="false">
+                    <button type="button" id="p-scan" class="btn-subtle shrink-0" title="Ler com a câmera" aria-label="Ler código com a câmera"><i data-icon="camera" class="size-4"></i></button>
+                    <button type="button" id="p-generate" class="btn-subtle shrink-0" title="Gerar código para etiqueta própria"><i data-icon="qr" class="size-4"></i>Gerar</button>
+                </div>
+                <p class="field-hint">Produto sem código? Toque em "Gerar" e imprima a etiqueta depois.</p>
+                <p class="field-error" data-error="code"></p>
+            </div>
+            <div>
+                <label for="p-name" class="label">Nome do produto</label>
+                <input id="p-name" name="name" class="input" maxlength="80" placeholder="Ex.: Caixa de som 40 L" autocomplete="off">
+                <p class="field-error" data-error="name"></p>
+            </div>
+            <fieldset class="grid grid-cols-3 gap-3">
+                <legend class="label mb-1">Medidas da caixa (m)</legend>
+                <div><label for="p-w" class="sr-only">Largura</label><input id="p-w" name="w" class="input" inputmode="decimal"><p class="field-hint">Largura</p><p class="field-error" data-error="w"></p></div>
+                <div><label for="p-h" class="sr-only">Altura</label><input id="p-h" name="h" class="input" inputmode="decimal"><p class="field-hint">Altura</p><p class="field-error" data-error="h"></p></div>
+                <div><label for="p-d" class="sr-only">Profundidade</label><input id="p-d" name="d" class="input" inputmode="decimal"><p class="field-hint">Profundidade</p><p class="field-error" data-error="d"></p></div>
+            </fieldset>
+            <div class="grid grid-cols-2 items-end gap-3">
+                <div>
+                    <label for="p-weight" class="label">Peso (kg)</label>
+                    <input id="p-weight" name="weight" class="input" inputmode="decimal">
+                    <p class="field-error" data-error="weight"></p>
+                </div>
+                <label class="flex cursor-pointer items-center gap-2 pb-2.5 text-sm text-slate-300">
+                    <input name="fragile" type="checkbox" class="size-4 accent-amber-400">Frágil
+                </label>
+            </div>
+            <div class="flex justify-end gap-2 pt-2">
+                <button type="button" data-close class="btn-ghost">Cancelar</button>
+                <button type="submit" id="product-submit" class="btn-primary">Cadastrar</button>
+            </div>
+        </form>
+    </dialog>
+
+    <!-- ===== Leitura de código (câmera, digitação ou leitor USB/Bluetooth) ===== -->
+    <dialog id="scan-dialog" aria-labelledby="scan-dialog-title"
+        class="m-auto max-h-[95dvh] w-[calc(100%-1rem)] max-w-md overflow-y-auto rounded-2xl border border-slate-800 bg-slate-900 p-0 text-slate-100 shadow-2xl backdrop:bg-slate-950/90">
+        <div class="space-y-3 p-4">
+            <div class="flex items-center justify-between">
+                <h3 id="scan-dialog-title" class="flex items-center gap-2 text-base font-semibold text-slate-200"><i data-icon="scan" class="size-5 text-emerald-400"></i>Ler código</h3>
+                <button type="button" data-close class="icon-btn" aria-label="Fechar"><i data-icon="x" class="size-5"></i></button>
+            </div>
+            <div class="relative aspect-[4/3] overflow-hidden rounded-xl bg-black">
+                <video id="scan-video" class="size-full object-cover" playsinline muted></video>
+                <div class="pointer-events-none absolute inset-x-[12%] top-1/2 h-[38%] -translate-y-1/2 rounded-lg border-2 border-emerald-400/90 shadow-[0_0_0_999px_rgba(0,0,0,0.35)]"></div>
+                <div class="pointer-events-none absolute inset-x-[14%] top-1/2 h-0.5 -translate-y-1/2 animate-pulse bg-red-500/80"></div>
+            </div>
+            <p id="scan-status" class="min-h-5 text-center text-sm text-slate-300" role="status">Aponte a câmera para o código de barras ou QR code.</p>
+            <form id="scan-manual" class="flex gap-1.5" novalidate>
+                <label for="scan-input" class="sr-only">Digite o código</label>
+                <input id="scan-input" class="input flex-1 font-mono" placeholder="Ou digite o código" autocomplete="off" spellcheck="false" enterkeyhint="go">
+                <button type="submit" class="btn-primary shrink-0">OK</button>
+            </form>
+            <p class="text-[11px] leading-snug text-slate-500">Tem leitor de código USB ou Bluetooth? Clique no campo acima e faça a leitura.</p>
+        </div>
+    </dialog>
+
+    <!-- ===== Etiquetas (escolher quantidades e imprimir) ===== -->
+    <dialog id="labels-dialog" aria-labelledby="labels-dialog-title"
+        class="m-auto max-h-[90dvh] w-[calc(100%-2rem)] max-w-md overflow-y-auto rounded-2xl border border-slate-800 bg-slate-900 p-0 text-slate-100 shadow-2xl backdrop:bg-slate-950/80 backdrop:backdrop-blur-sm">
+        <form id="labels-form" method="dialog" class="space-y-4 p-6" novalidate>
+            <div class="flex items-center justify-between">
+                <h3 id="labels-dialog-title" class="text-base font-semibold text-slate-200">Imprimir etiquetas</h3>
+                <button type="button" data-close class="icon-btn" aria-label="Fechar"><i data-icon="x" class="size-5"></i></button>
+            </div>
+            <p class="text-xs leading-relaxed text-slate-400">Folha A4 de etiquetas adesivas com 3 colunas × 8 linhas (63,5 × 33,9 mm). Na janela de impressão, use escala 100% e sem margens extras.</p>
+            <div id="labels-list" class="space-y-1.5"></div>
+            <p id="labels-total" class="text-right font-mono text-xs text-slate-400"></p>
+            <div class="flex justify-end gap-2 pt-1">
+                <button type="button" data-close class="btn-ghost">Cancelar</button>
+                <button type="submit" class="btn-primary"><i data-icon="printer" class="size-4"></i>Imprimir</button>
+            </div>
+        </form>
+    </dialog>
+
     <!-- ===== Modal de área de atenção ===== -->
     <dialog id="area-dialog" aria-labelledby="area-dialog-title"
         class="m-auto max-h-[90dvh] w-[calc(100%-2rem)] max-w-sm overflow-y-auto rounded-2xl border border-slate-800 bg-slate-900 p-0 text-slate-100 shadow-2xl backdrop:bg-slate-950/80 backdrop:backdrop-blur-sm">
@@ -314,6 +417,8 @@
 
     <!-- Relatório gerado só na impressão -->
     <div id="print-report"></div>
+    <!-- Etiquetas geradas só na impressão -->
+    <div id="print-labels"></div>
 
     <script type="module" src="/src/main.js"></script>
 </body>

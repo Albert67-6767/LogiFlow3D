@@ -14,6 +14,8 @@ import { mountTruckDialog } from './ui/views/truckDialog.js';
 import { buildPrintReport } from './ui/views/printReport.js';
 import { mountTheme } from './ui/theme.js';
 import { mountNavigation } from './ui/views/navigationView.js';
+import { mountProductsView } from './ui/views/productsView.js';
+import { mountScanner } from './ui/scanner.js';
 
 hydrateIcons();
 mountTheme();
@@ -27,6 +29,8 @@ mountMetricsView();
 mountItemDialog();
 mountTruckDialog();
 mountNavigation();
+mountScanner();
+mountProductsView();
 
 $('#btn-add-item').addEventListener('click', () => openItemDialog());
 
@@ -86,7 +90,10 @@ $('#btn-print').addEventListener('click', () => {
     openSidebar(false);
     window.print();
 });
-window.addEventListener('beforeprint', () => buildPrintReport(getScene()?.snapshot()));
+window.addEventListener('beforeprint', () => {
+    if (document.body.dataset.print === 'labels') return; // impressão de etiquetas
+    buildPrintReport(getScene()?.snapshot());
+});
 
 // ---------- Teclado ----------
 document.addEventListener('keydown', (e) => {

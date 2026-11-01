@@ -1,5 +1,6 @@
 import { DEFAULT_SETTINGS, SAMPLE_ITEMS, SAMPLE_STOP_KM, SAMPLE_DEPOT } from '../config/constants.js';
 import * as fleet from '../core/fleet.js';
+import * as catalog from '../core/products.js';
 import { newId } from '../core/io.js';
 import { packCargo } from '../core/packer.js';
 import { loadTotals, weightDistribution, groupStops, routeMetrics } from '../core/metrics.js';
@@ -16,7 +17,7 @@ import { driveTimeFactor } from '../core/navigation.js';
 const STORAGE_KEY = 'logiflow3d:v2';
 const PERSISTED = [
     'trucks', 'truckKey', 'items', 'stopKm', 'settings', 'wallsOpaque', 'activeTab',
-    'theme', 'mapStyle', 'depot', 'riskAreas', 'geo', 'routePlan', 'deliveries',
+    'theme', 'mapStyle', 'depot', 'riskAreas', 'geo', 'routePlan', 'deliveries', 'products',
 ];
 
 const systemTheme = () => (globalThis.matchMedia?.('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
@@ -44,6 +45,7 @@ function initialState() {
         geo: {},          // posição de cada endereço já localizado (chave: addressKey)
         routePlan: null,  // caminhos buscados no serviço de rotas
         routeStatus: { busy: false, message: '' }, // não é salvo
+        products: {},    // catálogo de produtos com código de barras / QR
         deliveries: {},  // status de cada parada na viagem: { [nº]: { status: 'done' | 'pending', reason, note, at } }
     };
     try {
@@ -57,6 +59,7 @@ function initialState() {
         if (!Array.isArray(base.riskAreas)) base.riskAreas = [];
         if (!base.geo || typeof base.geo !== 'object') base.geo = {};
         if (!base.deliveries || typeof base.deliveries !== 'object') base.deliveries = {};
+        base.products = catalog.sanitizeProducts(base.products);
     } catch { /* armazenamento indisponível: segue com o exemplo */ }
     if (!base.trucks[base.truckKey]) base.truckKey = Object.keys(base.trucks)[0];
     return base;
@@ -221,6 +224,33 @@ export const actions = {
             return { trucks, truckKey: trucks[s.truckKey] ? s.truckKey : 'hr' };
         });
     },
+    // ----- Produtos (lançam fleet.ValidationError com dados inválidos) -----
+
+    /** Cadastra um produto. Retorna o id. */
+    addProduct(data) {
+        const { value, errors } = catalog.validateProduct(data, state.products);
+        if (!value) throw new fleet.ValidationError(errors);
+        const id = newId();
+        setState(s => ({ products: { ...s.products, [id]: value } }));
+        return id;
+    },
+    updateProduct(id, data) {
+        if (!state.products[id]) throw new Error('Produto não encontrado.');
+        const { value, errors } = catalog.validateProduct({ ...state.products[id], ...data }, state.products, id);
+        if (!value) throw new fleet.ValidationError(errors);
+        setState(s => ({ products: { ...s.products, [id]: value } }));
+    },
+    /** Remove um produto. Retorna função de desfazer. */
+    removeProduct(id) {
+        const removed = state.products[id];
+        if (!removed) return null;
+        setState(s => {
+            const { [id]: _gone, ...products } = s.products;
+            return { products };
+        });
+        return () => setState(s => ({ products: { ...s.products, [id]: removed } }));
+    },
+
     setTab(activeTab) {
         setState({ activeTab });
     },
@@ -243,6 +273,7 @@ export const actions = {
             depot: project.depot ?? s.depot,
             riskAreas: project.riskAreas ?? s.riskAreas,
             geo: { ...s.geo, ...project.geo },
+            products: project.products ? { ...s.products, ...project.products } : s.products,
             selectedId: null,
         }));
     },
