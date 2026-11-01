@@ -52,16 +52,21 @@ const STATUS = {
 /** Mensagem conforme o eixo mais desequilibrado. */
 function balanceMessage(dist) {
     if (dist.status === 'empty') return 'Adicione cargas para ver a distribuição.';
-    if (dist.status === 'ok') return 'Carga equilibrada.';
+    if (dist.status === 'ok') {
+        return dist.front > dist.rear ? 'Carga bem posicionada, com mais peso junto à cabine.' : 'Carga equilibrada.';
+    }
     const critical = dist.status === 'danger';
     if (dist.axis === 'lateral') {
         const side = dist.left > dist.right ? 'esquerdo' : 'direito';
         return critical ? `Peso concentrado no lado ${side}. Risco de tombamento em curvas.`
             : `Peso maior no lado ${side}. Cuidado nas curvas.`;
     }
-    const where = dist.front > dist.rear ? 'na frente (eixo dianteiro)' : 'na traseira (eixo traseiro)';
-    return critical ? `Peso muito concentrado ${where}. Redistribua para não sobrecarregar o eixo.`
-        : `Peso concentrado ${where}.`;
+    if (dist.front > dist.rear) {
+        return 'Quase todo o peso está colado na cabine. Confira se o eixo dianteiro aguenta.';
+    }
+    return critical
+        ? 'Peso concentrado na traseira: a direção fica leve e o eixo traseiro sobrecarrega. Coloque os volumes mais pesados perto da cabine.'
+        : 'Peso maior na traseira. O ideal é ter mais peso perto da cabine.';
 }
 
 function balanceRow(leftLabel, rightLabel, left, right, leftColor, rightColor) {

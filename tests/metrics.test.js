@@ -21,9 +21,24 @@ describe('weightDistribution', () => {
         expect(r.axis).toBe('lateral');
     });
 
-    it('frente moderadamente pesada só gera atenção no eixo longitudinal', () => {
+    it('mais peso junto à cabine é o certo: não gera alerta', () => {
         const r = weightDistribution([{ x: 0.5, y: 0, z: 0.7, w: 1, h: 1, d: 1, weight: 100 }], truck);
         expect(r.front).toBe(70); // centro em z=1,2 de 4 m → 1 - 1,2/4 = 70% na frente
+        expect(r).toMatchObject({ status: 'ok', axis: null });
+    });
+
+    it('traseira pesada gera atenção e, se muito, perigo', () => {
+        const warn = weightDistribution([{ x: 0.5, y: 0, z: 1.8, w: 1, h: 1, d: 1, weight: 100 }], truck);
+        expect(warn.rear).toBe(57); // centro em z=2,3 → 42,5% na frente (arredonda 43) → 57% atrás
+        expect(warn).toMatchObject({ status: 'warn', axis: 'longitudinal' });
+        const danger = weightDistribution([{ x: 0.5, y: 0, z: 2.8, w: 1, h: 1, d: 1, weight: 100 }], truck);
+        expect(danger.rear).toBeGreaterThan(65);
+        expect(danger).toMatchObject({ status: 'danger', axis: 'longitudinal' });
+    });
+
+    it('quase tudo colado na cabine só pede para conferir o eixo dianteiro', () => {
+        const r = weightDistribution([{ x: 0.5, y: 0, z: 0, w: 1, h: 1, d: 0.5, weight: 100 }], truck);
+        expect(r.front).toBeGreaterThan(85);
         expect(r).toMatchObject({ status: 'warn', axis: 'longitudinal' });
     });
 

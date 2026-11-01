@@ -41,7 +41,10 @@ export function weightDistribution(placed, truck) {
     const longGap = Math.abs(2 * frontPct - 100);
     const latGap = Math.abs(2 * leftPct - 100);
     const level = (gap, lim) => (gap > lim.danger ? 2 : gap >= lim.warn ? 1 : 0);
-    const longLevel = level(longGap, BALANCE.longitudinal);
+    const { rearWarn, rearDanger, frontWarn } = BALANCE.longitudinal;
+    const rearPct = 100 - frontPct;
+    // Mais peso na frente é o certo; o alerta é para traseira pesada (ou frente extrema).
+    const longLevel = rearPct > rearDanger ? 2 : rearPct > rearWarn || frontPct > frontWarn ? 1 : 0;
     const latLevel = level(latGap, BALANCE.lateral);
     const axis = latLevel > 0 && latLevel >= longLevel ? 'lateral' : longLevel > 0 ? 'longitudinal' : null;
     const status = ['ok', 'warn', 'danger'][Math.max(longLevel, latLevel)];

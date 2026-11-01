@@ -46,11 +46,14 @@ export const PACKING = {
 };
 
 /**
- * Limites do alerta de distribuição de peso, em pontos de diferença entre os
- * lados (ex.: 65/35 = 30). O lateral é mais rígido por causa do tombamento.
+ * Limites do alerta de distribuição de peso.
+ * Frente/traseira (% do peso na traseira): o certo é ter mais peso junto à cabine;
+ * peso na traseira deixa a direção leve e sobrecarrega o eixo traseiro.
+ * Só quase tudo colado na cabine (frontWarn % na frente) pede para conferir o eixo dianteiro.
+ * Lateral: pontos de diferença entre os lados (ex.: 65/35 = 30), mais rígido por causa do tombamento.
  */
 export const BALANCE = {
-    longitudinal: { warn: 30, danger: 50 },
+    longitudinal: { rearWarn: 55, rearDanger: 65, frontWarn: 85 },
     lateral: { warn: 15, danger: 30 },
 };
 
