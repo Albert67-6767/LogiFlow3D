@@ -86,17 +86,18 @@
             <section id="tab-packing" role="tabpanel" class="absolute inset-0 flex">
                 <div id="canvas-container" class="relative min-w-0 flex-1 bg-slate-950">
 
-                    <div class="overlay absolute left-3 top-3 z-10 flex flex-wrap gap-1 p-1.5">
+                    <div class="fp-hide overlay absolute left-3 top-3 z-10 flex flex-wrap gap-1 p-1.5">
                         <button id="btn-toggle-walls" class="seg-btn" aria-pressed="false"></button>
                         <button id="btn-reset-cam" class="seg-btn"><i data-icon="rotate-ccw" class="size-3.5"></i><span class="hidden sm:inline">Enquadrar</span></button>
+                        <button id="btn-fp" class="seg-btn !text-emerald-300" title="Ver de dentro do baú, em primeira pessoa"><i data-icon="door" class="size-3.5"></i>Entrar no baú</button>
                         <button id="btn-toggle-items" class="seg-btn xl:hidden" aria-controls="items-panel" aria-expanded="false">
                             <i data-icon="list" class="size-3.5"></i>Itens <span id="items-count-badge" class="font-mono"></span>
                         </button>
                     </div>
 
-                    <div id="unplaced-alert" class="absolute right-3 top-3 z-10 max-w-[calc(100%-1.5rem)] sm:max-w-xs" hidden></div>
+                    <div id="unplaced-alert" class="fp-hide absolute right-3 top-3 z-10 max-w-[calc(100%-1.5rem)] sm:max-w-xs" hidden></div>
 
-                    <div class="absolute bottom-3 left-3 right-3 z-10 flex flex-col items-start gap-2 sm:right-auto sm:w-80">
+                    <div class="fp-hide absolute bottom-3 left-3 right-3 z-10 flex flex-col items-start gap-2 sm:right-auto sm:w-80">
                         <div id="stop-legend" class="overlay w-full px-3 py-2"></div>
                         <details id="weight-panel" class="overlay group w-full p-3" open>
                             <summary class="flex cursor-pointer list-none items-center justify-between text-xs font-semibold uppercase tracking-wider text-slate-300">
@@ -105,6 +106,29 @@
                             </summary>
                             <div id="weight-body" class="mt-2"></div>
                         </details>
+                    </div>
+
+                    <!-- Modo primeira pessoa (andar dentro do baú) -->
+                    <div id="fp-hud" class="pointer-events-none absolute inset-0 z-20 overflow-hidden" hidden>
+                        <div class="fp-bar top-0"></div>
+                        <div class="fp-bar bottom-0"></div>
+                        <p id="fp-title" class="absolute inset-x-0 top-[38%] text-center text-2xl font-black uppercase tracking-[0.3em] text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)] sm:text-4xl">Dentro do baú</p>
+                        <div id="fp-crosshair" class="absolute left-1/2 top-1/2 size-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/90 shadow-[0_0_0_2px_rgba(0,0,0,0.35)]"></div>
+                        <p id="fp-help" class="overlay absolute left-3 top-3 max-w-[calc(100%-9rem)] px-3 py-2 text-xs leading-snug text-slate-200"></p>
+                        <button id="btn-fp-exit" class="btn-primary pointer-events-auto absolute right-3 top-3"><i data-icon="exit" class="size-4"></i>Sair do baú</button>
+                        <p id="fp-prompt" class="absolute left-1/2 top-[calc(50%+1.5rem)] max-w-[80%] -translate-x-1/2 truncate rounded-lg bg-black/65 px-3 py-1.5 text-center text-sm font-medium text-white" hidden></p>
+                        <p id="fp-msg" class="absolute left-1/2 top-[28%] w-max max-w-[85%] -translate-x-1/2 rounded-lg bg-amber-500/90 px-3 py-2 text-center text-sm font-semibold text-amber-950 shadow-lg" hidden></p>
+                        <div id="fp-held" class="overlay absolute left-3 top-[4.5rem] w-64 max-w-[calc(100%-1.5rem)] p-3 text-xs" hidden></div>
+                        <div id="fp-actions" class="pointer-events-auto absolute bottom-6 right-5 flex select-none flex-col items-end gap-3">
+                            <button id="fp-pick" class="fp-action"><i data-icon="package" class="size-6"></i><span>Pegar</span></button>
+                            <div class="flex items-end gap-3">
+                                <button id="fp-crouch" class="fp-action" aria-pressed="false"><i data-icon="chevron-down" class="size-6"></i><span>Agachar</span></button>
+                                <button id="fp-jump" class="fp-action size-20"><i data-icon="arrow-up" class="size-7"></i><span>Pular</span></button>
+                            </div>
+                        </div>
+                        <div id="fp-stick" class="pointer-events-auto absolute bottom-6 left-6 size-32 touch-none select-none rounded-full border-2 border-white/40 bg-slate-900/40 backdrop-blur-sm" aria-hidden="true">
+                            <div id="fp-knob" class="absolute left-1/2 top-1/2 size-14 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/80 shadow-lg"></div>
+                        </div>
                     </div>
 
                     <div id="tooltip" class="pointer-events-none fixed z-50 max-w-60 rounded-lg border border-slate-700 bg-slate-900/95 px-3 py-2 text-xs shadow-xl" hidden></div>

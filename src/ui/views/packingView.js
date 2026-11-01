@@ -252,9 +252,117 @@ export function mountPackingView() {
             h('span', { class: 'hidden sm:inline' }, s.wallsOpaque ? 'Paredes opacas' : 'Paredes transparentes'));
     });
     $('#btn-reset-cam').addEventListener('click', () => scene.fitCamera());
+    mountFirstPersonHud(container);
     $('#btn-toggle-items').addEventListener('click', () => openItemsPanel(true));
     $('#btn-close-items').addEventListener('click', () => openItemsPanel(false));
     $('#items-backdrop').addEventListener('click', () => openItemsPanel(false));
+}
+
+// ---------- Primeira pessoa ----------
+function mountFirstPersonHud(container) {
+    const hud = $('#fp-hud');
+    const title = $('#fp-title');
+    const touch = window.matchMedia('(pointer: coarse)').matches;
+    render($('#fp-help'), touch
+        ? 'Controle redondo anda · arraste a tela para olhar · mire numa caixa e toque em Pegar.'
+        : h('span', {}, h('b', {}, 'W A S D'), ' anda · ', h('b', {}, 'Shift'), ' corre · ', h('b', {}, 'Espaço'), ' pula · ',
+            h('b', {}, 'C'), ' agacha · ', h('b', {}, 'E'), ' pega/devolve caixa · ', h('b', {}, 'arraste'), ' olha · ', h('b', {}, 'Esc'), ' sai'));
+    const fp = scene.firstPerson;
+    const itemOf = (id) => getState().items.find(i => i.id === id);
+
+    $('#btn-fp').addEventListener('click', () => {
+        if (!getDerived().truck) return;
+        scene.enterFirstPerson();
+    });
+    $('#btn-fp-exit').addEventListener('click', () => scene.exitFirstPerson());
+
+    // Mira, caixa na mão e avisos
+    const prompt = $('#fp-prompt');
+    const crosshair = $('#fp-crosshair');
+    const heldCard = $('#fp-held');
+    const msg = $('#fp-msg');
+    const pickBtn = $('#fp-pick');
+    let msgTimer = 0;
+    fp.on('target', (t) => {
+        const item = t && itemOf(t.id);
+        crosshair.classList.toggle('on-target', Boolean(item));
+        prompt.hidden = !item;
+        if (item) prompt.textContent = touch ? `Pegar: ${item.label}` : `E  ·  pegar ${item.label}`;
+    });
+    fp.on('held', (hd) => {
+        const item = hd && itemOf(hd.id);
+        heldCard.hidden = !item;
+        render(pickBtn, icon('package', 'size-6'), h('span', {}, item ? 'Devolver' : 'Pegar'));
+        pickBtn.setAttribute('aria-pressed', String(Boolean(item)));
+        if (!item) return;
+        render(heldCard,
+            h('p', { class: 'mb-1 text-[10px] font-semibold uppercase tracking-wider text-emerald-400' }, 'Na sua mão'),
+            h('p', { class: 'flex items-center gap-2 text-sm font-semibold text-slate-100' },
+                h('span', { class: 'size-2.5 shrink-0 rounded-full', style: { background: colorForStop(item.stop) } }), item.label),
+            h('p', { class: 'mt-1 font-mono text-slate-400' }, `Parada #${item.stop} · ${dims(item)} · ${int(item.weight)} kg`),
+            item.fragile && h('p', { class: 'mt-1 font-semibold text-amber-300' }, 'Frágil: cuidado!'),
+            item.weight > 25 && h('p', { class: 'mt-1 text-amber-300' }, `${int(item.weight)} kg: na vida real, use carrinho ou peça ajuda.`),
+            item.address && h('p', { class: 'mt-1 truncate text-slate-400' }, item.address),
+            h('p', { class: 'mt-2 text-slate-500' }, touch ? 'Toque em Devolver para pôr no lugar.' : 'E devolve ao lugar.'),
+        );
+    });
+    fp.on('message', (text) => {
+        clearTimeout(msgTimer);
+        msg.hidden = !text;
+        if (text) {
+            msg.textContent = text;
+            msgTimer = setTimeout(() => { msg.hidden = true; }, 2600);
+        }
+    });
+
+    // Botões de ação (celular): respondem no toque, sem esperar o "clique".
+    const press = (el, fn) => el.addEventListener('pointerdown', (e) => { e.preventDefault(); fn(); });
+    press($('#fp-jump'), () => fp.jump());
+    press(pickBtn, () => fp.pick());
+    press($('#fp-crouch'), () => {
+        fp.toggleCrouch();
+        $('#fp-crouch').setAttribute('aria-pressed', String(fp.isCrouching()));
+    });
+
+    fp.on('mode', (mode) => {
+        if (mode === 'orbit') delete container.dataset.fp;
+        else container.dataset.fp = mode;
+        hud.hidden = mode === 'orbit';
+        if (mode === 'entering') $('#fp-crouch').setAttribute('aria-pressed', 'false');
+        if (mode === 'walking') {
+            title.classList.remove('show');
+            void title.offsetWidth; // reinicia a animação
+            title.classList.add('show');
+        }
+    });
+
+    // Joystick na tela (celular/tablet).
+    const stick = $('#fp-stick');
+    const knob = $('#fp-knob');
+    let pointer = null;
+    const update = (e) => {
+        const r = stick.getBoundingClientRect();
+        const max = r.width / 2 - 14;
+        let dx = e.clientX - (r.left + r.width / 2);
+        let dy = e.clientY - (r.top + r.height / 2);
+        const len = Math.hypot(dx, dy);
+        if (len > max) { dx *= max / len; dy *= max / len; }
+        knob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+        scene.setStick(dx / max, dy / max);
+    };
+    const release = () => {
+        pointer = null;
+        knob.style.transform = '';
+        scene.setStick(0, 0);
+    };
+    stick.addEventListener('pointerdown', (e) => {
+        pointer = e.pointerId;
+        stick.setPointerCapture(e.pointerId);
+        update(e);
+    });
+    stick.addEventListener('pointermove', (e) => { if (e.pointerId === pointer) update(e); });
+    stick.addEventListener('pointerup', release);
+    stick.addEventListener('pointercancel', release);
 }
 
 export { openItemsPanel };

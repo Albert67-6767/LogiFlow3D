@@ -159,6 +159,33 @@
 /* ===== Impressão: só o relatório ===== */
 #print-report, #print-labels { display: none; }
 
+/* ----- Modo primeira pessoa ----- */
+#canvas-container[data-fp] .fp-hide { display: none !important; }
+#canvas-container[data-fp="walking"] canvas { cursor: grab; }
+#canvas-container[data-fp="walking"] canvas:active { cursor: grabbing; }
+.fp-bar { position: absolute; left: 0; right: 0; height: 0; background: #000; transition: height 0.6s ease; }
+#canvas-container[data-fp="entering"] .fp-bar, #canvas-container[data-fp="leaving"] .fp-bar { height: 11%; }
+#fp-title { opacity: 0; }
+#fp-title.show { animation: fp-title 2.2s ease forwards; }
+@keyframes fp-title {
+    0% { opacity: 0; transform: scale(1.15); letter-spacing: 0.6em; }
+    20%, 70% { opacity: 1; transform: scale(1); letter-spacing: 0.3em; }
+    100% { opacity: 0; }
+}
+#fp-crosshair, #fp-help, #btn-fp-exit, #fp-stick, #fp-actions, #fp-held, #fp-prompt { transition: opacity 0.3s; }
+#canvas-container:not([data-fp="walking"]) :is(#fp-crosshair, #fp-help, #btn-fp-exit, #fp-stick, #fp-actions, #fp-held, #fp-prompt, #fp-msg) { opacity: 0; pointer-events: none; }
+@media (pointer: fine) { #fp-stick, #fp-actions { display: none; } }
+.fp-action {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+    width: 4rem; height: 4rem; border-radius: 9999px; touch-action: none;
+    border: 2px solid rgb(255 255 255 / 0.4); background: rgb(15 23 42 / 0.55); backdrop-filter: blur(4px);
+    color: #fff; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+    transition: transform 0.1s, background 0.15s;
+}
+.fp-action:active { transform: scale(0.92); background: rgb(16 185 129 / 0.7); }
+.fp-action[aria-pressed="true"] { background: rgb(16 185 129 / 0.7); border-color: rgb(110 231 183); }
+#fp-crosshair.on-target { width: 0.9rem; height: 0.9rem; background: transparent; border: 2px solid #34d399; box-shadow: 0 0 0 2px rgb(0 0 0 / 0.35); }
+
 /* Etiquetas: folha A4 com 3 × 8 etiquetas de 63,5 × 33,9 mm. */
 @page labels { size: A4; margin: 12.9mm 7.2mm; }
 

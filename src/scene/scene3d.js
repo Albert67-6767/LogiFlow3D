@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { colorForStop } from '../config/constants.js';
 import { buildCabin } from './cabin.js';
+import { createFirstPerson } from './firstPerson.js';
 
 /*
  * Cena 3D do baú. Recebe dados já calculados (posições do packer) e só desenha.
@@ -123,6 +124,9 @@ export function createScene(container, { onHover, onSelect } = {}) {
     let truck = null;
     let cabinSize = { length: 0, height: 0, width: 0 }; // para enquadrar o veículo inteiro
     let wallsOpaqueNow = false;
+    let wallsMesh = null;   // paredes do baú (opacidade muda dentro do modo primeira pessoa)
+    let labelSprites = [];  // PORTA / CABINE (somem lá dentro)
+    let firstPerson = null; // criado mais abaixo
     let hoveredId = null;
     let selectedId = null;
     let active = true;
@@ -132,7 +136,8 @@ export function createScene(container, { onHover, onSelect } = {}) {
     function render() {
         pending = false;
         if (!active) return;
-        controls.update(); // com damping, dispara 'change' enquanto houver inércia
+        // Em primeira pessoa a câmera é controlada pelo modo de andar, não pela órbita.
+        if (!firstPerson?.isActive()) controls.update(); // com damping, dispara 'change' enquanto houver inércia
         renderer.render(scene, camera);
     }
     function requestRender() {
@@ -158,6 +163,7 @@ export function createScene(container, { onHover, onSelect } = {}) {
     // ---------- Construção ----------
     function setTruck(t, wallsOpaque) {
         const changed = !truck || truck.w !== t.w || truck.h !== t.h || truck.d !== t.d || truck.cabin !== t.cabin;
+        if (changed) firstPerson?.exit(true);
         truck = t;
         wallsOpaqueNow = wallsOpaque;
         clearGroup(truckGroup);
@@ -172,6 +178,7 @@ export function createScene(container, { onHover, onSelect } = {}) {
         }));
         walls.position.y = t.h / 2;
         walls.renderOrder = -1;
+        wallsMesh = walls;
 
         const edges = new THREE.LineSegments(new THREE.EdgesGeometry(shell), new THREE.LineBasicMaterial({ color: COLORS.wallEdge }));
         edges.position.y = t.h / 2;
@@ -199,12 +206,15 @@ export function createScene(container, { onHover, onSelect } = {}) {
         cabinLabel.position.set(0, cabin.height + 0.4, -t.d / 2 - cabin.length / 2);
 
         truckGroup.add(walls, edges, floor, cabin.group, cabin.under, doorFrame, doorLabel, cabinLabel);
+        labelSprites = [doorLabel, cabinLabel];
+        if (firstPerson?.isActive()) applyInside(true);
 
         if (changed) fitCamera();
         requestRender();
     }
 
     function setBoxes(placed, itemsById) {
+        firstPerson?.boxesChanged();
         clearGroup(boxGroup);
         if (!truck) return;
         for (const p of placed) {
@@ -228,10 +238,11 @@ export function createScene(container, { onHover, onSelect } = {}) {
     }
 
     function setCenterOfGravity(cog) {
+        cogGroup.userData.hasCog = Boolean(cog && truck);
         if (!cog || !truck) {
             cogGroup.visible = false;
         } else {
-            cogGroup.visible = true;
+            cogGroup.visible = !cogGroup.userData.hiddenInside;
             cogGroup.position.set(-truck.w / 2 + cog.x, cog.y, -truck.d / 2 + cog.z);
             cogStem.scale.y = cog.y;
             cogStem.computeLineDistances();
@@ -265,6 +276,7 @@ export function createScene(container, { onHover, onSelect } = {}) {
 
     function fitCamera() {
         if (!truck) return;
+        firstPerson?.exit(true);
         // Em telas estreitas (retrato) afasta a câmera para o baú caber na largura.
         const narrow = Math.max(1, 1.3 / camera.aspect);
         const length = truck.d + cabinSize.length;
@@ -280,11 +292,12 @@ export function createScene(container, { onHover, onSelect } = {}) {
 
     function setActive(value) {
         active = value;
-        if (active) requestRender();
+        if (active) { requestRender(); firstPerson?.resume(); }
     }
 
     /** Captura a imagem atual (usada no relatório de impressão). */
     function snapshot(width = 1400, height = 700) {
+        firstPerson.exit(true);
         // Renderiza num tamanho fixo e paisagem, independente da tela atual.
         const prev = { aspect: camera.aspect, size: renderer.getSize(new THREE.Vector2()), pos: camera.position.clone(), target: controls.target.clone() };
         renderer.setSize(width, height, false);
@@ -319,7 +332,7 @@ export function createScene(container, { onHover, onSelect } = {}) {
     }
 
     renderer.domElement.addEventListener('pointermove', (e) => {
-        if (e.buttons) return; // arrastando a câmera
+        if (e.buttons || firstPerson?.isActive()) return; // arrastando a câmera / mira no centro em primeira pessoa
         const id = pick(e);
         renderer.domElement.style.cursor = id ? 'pointer' : 'grab';
         setHovered(id);
@@ -337,6 +350,26 @@ export function createScene(container, { onHover, onSelect } = {}) {
         if (moved < 5) onSelect?.(pick(e));
     });
 
+    // ---------- Primeira pessoa (andar dentro do baú) ----------
+    function applyInside(inside) {
+        if (wallsMesh) wallsMesh.material.opacity = inside ? 0.6 : (wallsOpaqueNow ? 0.55 : 0.1);
+        labelSprites.forEach(l => { l.visible = !inside; });
+        cogGroup.userData.hiddenInside = inside;
+        cogGroup.visible = !inside && cogGroup.userData.hasCog === true;
+        camera.near = inside ? 0.03 : 0.1;
+        camera.updateProjectionMatrix();
+    }
+
+    firstPerson = createFirstPerson({
+        camera, controls, canvas: renderer.domElement,
+        getTruck: () => truck,
+        getBoxes: () => boxGroup.children,
+        setTarget: (id) => setHovered(id),
+        draw: () => { if (active) renderer.render(scene, camera); },
+        isVisible: () => active,
+        setInside: applyInside,
+    });
+
     /** Troca as cores da cena para o tema 'dark' ou 'light'. */
     function setTheme(name) {
         COLORS = THEMES[name] ?? THEMES.dark;
@@ -350,8 +383,10 @@ export function createScene(container, { onHover, onSelect } = {}) {
         cogStem.material.color.setHex(COLORS.cog);
         if (truck) {
             const keep = camera.position.clone();
+            const keepRot = camera.quaternion.clone();
             setTruck(truck, wallsOpaqueNow);
             camera.position.copy(keep);
+            camera.quaternion.copy(keepRot);
         }
         requestRender();
     }
@@ -359,5 +394,15 @@ export function createScene(container, { onHover, onSelect } = {}) {
     return {
         setTruck, setBoxes, setCenterOfGravity, setHovered, setSelected,
         fitCamera, setActive, snapshot, requestRender, setTheme,
+        enterFirstPerson: () => firstPerson.enter(),
+        exitFirstPerson: () => firstPerson.exit(),
+        setStick: (x, y) => firstPerson.setStick(x, y),
+        firstPerson: {
+            jump: () => firstPerson.jump(),
+            pick: () => firstPerson.pick(),
+            toggleCrouch: () => firstPerson.toggleCrouch(),
+            isCrouching: () => firstPerson.isCrouching(),
+            on: (type, fn) => firstPerson.on(type, fn),
+        },
     };
 }

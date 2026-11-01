@@ -6,7 +6,7 @@ import {
     Sun, Moon, Crosshair, ShieldAlert, Clock, Search, ArrowDownUp, LoaderCircle, Maximize, House, Map as MapIcon, Satellite,
     ArrowUp, ArrowUpRight, ArrowUpLeft, CornerUpRight, CornerUpLeft, Undo2, Redo2, Flag, Merge, Ship, Volume2, VolumeX,
     Play, Pause, ChevronLeft, ChevronRight, LocateFixed, PackageCheck, ExternalLink, Navigation2,
-    ScanBarcode, QrCode, Tag, Camera, CameraOff, Keyboard,
+    ScanBarcode, QrCode, Tag, Camera, CameraOff, Keyboard, DoorOpen, LogOut, Gamepad2,
 } from 'lucide';
 
 // Só os ícones usados entram no pacote final.
@@ -25,6 +25,7 @@ const ICONS = {
     volume: Volume2, 'volume-off': VolumeX, play: Play, pause: Pause, 'chevron-left': ChevronLeft,
     'chevron-right': ChevronRight, locate: LocateFixed, 'package-check': PackageCheck, external: ExternalLink, arrow: Navigation2,
     scan: ScanBarcode, qr: QrCode, tag: Tag, camera: Camera, 'camera-off': CameraOff, keyboard: Keyboard,
+    door: DoorOpen, exit: LogOut, gamepad: Gamepad2,
 };
 
 export function icon(name, className = 'size-4') {

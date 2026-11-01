@@ -65,6 +65,10 @@ Aba **Produtos & Etiquetas**: cadastre cada produto uma vez (código, nome, medi
 
 Código: `core/products.js` (regras, testadas), `ui/scanner.js` (câmera) e `ui/views/productsView.js` (tela e etiquetas).
 
+## Entrar no baú (primeira pessoa)
+
+Na aba 3D, **Entrar no baú** faz uma animação até a porta traseira e coloca a câmera lá dentro, na altura dos olhos (1,45 m). No computador: **W A S D** ou setas andam, **Shift** corre, **Espaço** pula, **C** agacha, **E** pega/devolve a caixa mirada (ponto no centro da tela), arrastar o mouse olha em volta e **Esc** sai. No celular: joystick para andar, botões Pular / Agachar / Pegar e arrastar para olhar. Paredes e caixas bloqueiam a passagem; dá para pular em cima de caixas baixas. Pegar a caixa mostra parada, medidas e peso; é só visual: ao devolver ela volta ao lugar calculado. Código: `src/scene/firstPerson.js`.
+
 ## Rota no mapa
 
 Aba **Rota**: informe a base de saída e clique em **Calcular melhor rota**. Para cada trecho (base → #1 → #2 …) o sistema busca até 3 caminhos e escolhe o de menor "custo", somando:
