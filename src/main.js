@@ -102,3 +102,14 @@ document.addEventListener('keydown', (e) => {
     openItemsPanel(false);
     if (getState().selectedId) actions.select(null);
 });
+
+// ---------- Capa ----------
+// Fica um instante na tela (pelo menos ~1 s desde a abertura) e some suavemente.
+{
+    const splash = document.getElementById('splash');
+    const wait = Math.max(0, 1100 - performance.now());
+    setTimeout(() => {
+        splash.style.opacity = '0';
+        setTimeout(() => splash.remove(), 550);
+    }, wait);
+}

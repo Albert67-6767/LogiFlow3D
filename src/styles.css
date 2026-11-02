@@ -280,3 +280,9 @@
 
 /* Durante a navegação os avisos sobem para não cobrir os botões de baixo */
 body:has(#nav-screen:not([hidden])) #toasts { bottom: auto; top: 9.5rem; }
+
+/* Capa: o logo aparece crescendo de leve */
+@keyframes splash-in {
+    from { opacity: 0; transform: scale(.94); }
+    to { opacity: 1; transform: scale(1); }
+}
