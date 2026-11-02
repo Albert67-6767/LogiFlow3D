@@ -108,6 +108,25 @@ export const RISK_LEVELS = {
     3: { label: 'Evitar', weight: 5, color: '#ef4444' },
 };
 
+/**
+ * Observações dos motoristas: pontos onde o veículo não passou.
+ * A rota desvia de um círculo de `radius` metros em volta do ponto.
+ */
+export const ROAD_BLOCK = {
+    radius: 25,
+    aheadM: 35, // "na próxima rua": ponto marcado este tanto depois da próxima curva
+    reasons: [
+        'Rua estreita demais',
+        'Altura baixa (viaduto, fiação, galhos)',
+        'Proibido para caminhão',
+        'Rua fechada / em obras',
+        'Sem espaço para manobrar',
+        'Ladeira ou piso ruim',
+        'Outro motivo',
+    ],
+    scopes: { truck: 'Só caminhão', all: 'Todos os veículos' },
+};
+
 /** A partir desta carga máxima (kg) a rota usa o perfil de caminhão (evita vias restritas). */
 export const HEAVY_PAYLOAD = 3000;
 

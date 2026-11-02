@@ -1,7 +1,9 @@
 import L from 'leaflet';
-import { NAVIGATION, PENDING_REASONS, colorForStop } from '../../config/constants.js';
+import { NAVIGATION, PENDING_REASONS, ROAD_BLOCK, colorForStop } from '../../config/constants.js';
 import { buildNav, snap, progress, pointAt, spokenDistance, isDestination } from '../../core/navigation.js';
 import { haversine } from '../../core/geo.js';
+import { blocksFor, blockPolygons } from '../../core/roadBlocks.js';
+import { openBlockDialog } from './blockDialog.js';
 import { fetchAlternatives } from '../../services/mapApi.js';
 import { actions, getDerived, getState, watch } from '../../state/store.js';
 import { toast } from '../toast.js';
@@ -114,6 +116,10 @@ function buildScreen() {
                 h('p', { id: 'nav-end', class: 'mt-1.5 text-xs text-slate-500' }),
                 h('div', { class: 'mt-3 flex gap-2' },
                     h('button', { class: 'btn-ghost border border-slate-700 px-3 py-3 text-red-400', onclick: () => stop(true) }, icon('x', 'size-5'), 'Encerrar'),
+                    h('button', {
+                        class: 'btn border border-red-500/40 bg-red-500/10 px-3 py-3 font-semibold text-red-300',
+                        onclick: openBlockChooser, title: 'Avisar que o veículo não passa por esta rua',
+                    }, icon('ban', 'size-5'), 'Não passa'),
                     h('button', { id: 'nav-arrive', class: 'btn-primary flex-1 py-3 text-base', onclick: () => openArrival() }, icon('package-check', 'size-5'), 'Cheguei'),
                 ),
                 h('div', { class: 'mt-2 grid grid-cols-4 gap-1.5' },
@@ -146,6 +152,12 @@ function drawRoute() {
         const el = h('div', { class: 'map-pin', style: { width: '30px', height: '30px', background: done ? '#64748b' : colorForStop(leg.stop) } }, String(leg.stop));
         L.marker(nav.points[leg.end], { icon: L.divIcon({ html: el, className: '', iconSize: [30, 30], iconAnchor: [15, 15] }) }).addTo(layers.stops);
     });
+    // Ruas sem passagem que valem para este veículo
+    for (const b of blocksFor(getState().roadBlocks, getDerived().profile)) {
+        const el = h('div', { class: 'map-pin', style: { width: '24px', height: '24px', background: '#dc2626' } }, icon('ban', 'size-3.5'));
+        L.marker([b.lat, b.lon], { icon: L.divIcon({ html: el, className: '', iconSize: [24, 24], iconAnchor: [12, 12] }) })
+            .bindTooltip(`${b.reason}${b.note ? ` · ${b.note}` : ''}`).addTo(layers.stops);
+    }
 }
 
 function setBanner(text, tone = 'amber') {
@@ -191,7 +203,7 @@ function update() {
 
     // Mapa
     const here = pos ? [pos.lat, pos.lon] : pointAt(nav, along);
-    const arrow = h('div', { style: { transform: `rotate(${heading}deg)`, color: '#10b981', filter: 'drop-shadow(0 2px 4px rgb(0 0 0 / .5))' } }, icon('arrow', 'size-9 fill-current stroke-white'));
+    const arrow = h('div', { style: { transform: `rotate(${heading}deg)`, color: '#00a3e0', filter: 'drop-shadow(0 2px 4px rgb(0 0 0 / .5))' } }, icon('arrow', 'size-9 fill-current stroke-white'));
     if (!posMarker) posMarker = L.marker(here, { zIndexOffset: 2000, interactive: false }).addTo(map);
     posMarker.setLatLng(here);
     posMarker.setIcon(L.divIcon({ html: arrow, className: '', iconSize: [36, 36], iconAnchor: [18, 18] }));
@@ -284,6 +296,50 @@ function openPending() {
     ));
 }
 
+// ---------- "Não dá para passar" ----------
+
+/**
+ * O motorista avisa que não passa: escolhe onde (a rua da próxima curva ou
+ * onde está agora), registra o motivo e a rota é recalculada desviando do ponto.
+ */
+function openBlockChooser() {
+    if (!nav) return;
+    arrivalOpen = true; // não abre a tela de chegada por cima
+    pauseSim();
+    const p = progress(nav, along, legIdx);
+    const here = pos ?? toLatLon(pointAt(nav, along));
+    const turn = !isDestination(p.next.type) && p.toNextM < 1500
+        ? toLatLon(pointAt(nav, Math.min(p.next.dist + ROAD_BLOCK.aheadM, nav.legs[legIdx].endDist - 30)))
+        : null;
+    const choose = (at) => {
+        closeArrival();
+        openBlockDialog({ at, scope: getDerived().profile === 'truck' ? 'truck' : 'all', onSaved: afterBlock });
+    };
+    const option = (label, hint, at, iconName) => h('button', {
+        class: 'btn w-full flex-col items-start gap-0.5 border border-slate-700 bg-slate-800/60 px-4 py-3 text-left', onclick: () => choose(at),
+    }, h('span', { class: 'flex items-center gap-2 text-base font-semibold text-slate-100' }, icon(iconName, 'size-5'), label),
+        h('span', { class: 'text-xs text-slate-400' }, hint));
+    const el = $('#nav-arrival');
+    el.hidden = false;
+    render(el, h('div', { class: 'overlay space-y-2 p-4 shadow-2xl' },
+        h('div', { class: 'flex items-center gap-2' },
+            icon('ban', 'size-5 text-red-400'),
+            h('p', { class: 'flex-1 text-lg font-bold text-slate-100' }, 'Onde não dá para passar?')),
+        turn && option('Na próxima rua', p.next.text, turn, MANEUVER_ICON[p.next.type] ?? 'arrow-up'),
+        option('Aqui onde estou', pos ? 'Pela posição do GPS' : 'Pela posição na rota', here, 'locate'),
+        backButton(closeArrival, 'Cancelar'),
+    ));
+}
+
+const toLatLon = ([lat, lon]) => ({ lat, lon });
+
+function afterBlock() {
+    toast('Observação salva. Procurando outro caminho…', { tone: 'ok' });
+    say('Observação salva. Recalculando a rota.');
+    drawRoute();
+    reroute({ force: true });
+}
+
 /** Registra o resultado da parada e segue para a próxima. */
 function finishStop(result) {
     const leg = nav.legs[legIdx];
@@ -347,15 +403,18 @@ function onPosition(p, { simulated = false } = {}) {
     update();
 }
 
-async function reroute() {
-    if (rerouting || Date.now() - lastReroute < NAVIGATION.rerouteCooldownS * 1000) return;
+async function reroute({ force = false } = {}) {
+    if (rerouting || (!force && Date.now() - lastReroute < NAVIGATION.rerouteCooldownS * 1000)) return;
     rerouting = true;
     lastReroute = Date.now();
     setBanner('Recalculando a rota a partir daqui…');
     say('Recalculando a rota.');
     try {
         const d = getDerived();
-        const [fresh] = await fetchAlternatives(pos, nav.legs[legIdx].point, { profile: d.profile, truck: d.truck, alternates: 0 });
+        const from = pos ?? toLatLon(pointAt(nav, along));
+        const to = nav.legs[legIdx].point;
+        const blocks = blockPolygons(blocksFor(getState().roadBlocks, d.profile), from, to);
+        const [fresh] = await fetchAlternatives(from, to, { profile: d.profile, truck: d.truck, blocks, alternates: 0 });
         alts[legIdx] = fresh;
         const keepLeg = legIdx;
         nav = buildNav(alts, stops, d.timeFactor);

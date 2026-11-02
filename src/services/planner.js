@@ -1,6 +1,7 @@
 import { actions, getState, getDerived } from '../state/store.js';
 import { addressKey, circlePolygon, insideArea } from '../core/geo.js';
-import { legKey, riskExposure } from '../core/routing.js';
+import { legKey, riskExposure, vehicleKey } from '../core/routing.js';
+import { blocksFor, blockPolygons, blocksVersion } from '../core/roadBlocks.js';
 import { geocode, fetchAlternatives } from './mapApi.js';
 
 /*
@@ -65,21 +66,26 @@ export async function planRoute() {
             if (!from || !to) continue;
             const key = legKey(from, to, d.profile);
             const cached = previous.get(key);
-            // Reaproveita o trecho já calculado (se tiver as instruções de curva).
-            if (cached?.alternatives?.length && cached.alternatives[0].maneuvers && cached.areasVersion === areasVersion(s.riskAreas)) {
+            const vehicle = vehicleKey(d.truck, d.profile);
+            const blocks = blocksFor(s.roadBlocks, d.profile);
+            const blocksV = blocksVersion(blocks);
+            const exclude = blockPolygons(blocks, from, to);
+            // Reaproveita o trecho já calculado (com instruções de curva, mesmas áreas e mesmo veículo).
+            if (cached?.alternatives?.length && cached.alternatives[0].maneuvers && cached.areasVersion === areasVersion(s.riskAreas)
+                && cached.vehicle === vehicle && cached.alternatives[0].narrowKm !== undefined && (cached.blocksVersion ?? '') === blocksV) {
                 legs.push(cached);
                 continue;
             }
 
             status(`Calculando trecho ${i} de ${waypoints.length - 1}…`);
             try {
-                const alternatives = await fetchAlternatives(from, to, { profile: d.profile, truck: d.truck });
+                const alternatives = await fetchAlternatives(from, to, { profile: d.profile, truck: d.truck, blocks: exclude });
                 const avoid = areasToAvoid(alternatives, s.riskAreas, from, to);
                 if (avoid.length) {
                     status(`Procurando desvio no trecho ${i}…`);
                     try {
                         const detours = await fetchAlternatives(from, to, {
-                            profile: d.profile, truck: d.truck, avoid: avoid.map(a => circlePolygon(a)),
+                            profile: d.profile, truck: d.truck, avoid: avoid.map(a => circlePolygon(a)), blocks: exclude,
                         });
                         for (const det of detours) {
                             const dup = alternatives.some(a => Math.abs(a.km - det.km) < 0.05 && Math.abs(a.min - det.min) < 0.2);
@@ -87,7 +93,7 @@ export async function planRoute() {
                         }
                     } catch { /* sem desvio possível: fica com as alternativas normais */ }
                 }
-                legs.push({ key, alternatives, areasVersion: areasVersion(s.riskAreas) });
+                legs.push({ key, alternatives, areasVersion: areasVersion(s.riskAreas), vehicle, blocksVersion: blocksV });
             } catch (err) {
                 failures++;
                 legs.push({ key, alternatives: [], error: err.message });

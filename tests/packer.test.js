@@ -102,3 +102,45 @@ describe('packCargo', () => {
         expect(placed.find(p => p.id === 'largo')).toBeUndefined();
     });
 });
+
+describe('arrumação manual', async () => {
+    const { dropBox, boxOnTop, snapXZ, lifoIssues, turned, layoutSignature } = await import('../src/core/manualLayout.js');
+    const truck = { w: 2, h: 2, d: 4, payload: 5000 };
+    const base = { id: 'a', x: 0, y: 0, z: 0, w: 1, h: 1, d: 1, weight: 100, stop: 1, fragile: false };
+
+    it('cai sobre a caixa de baixo quando tem apoio', () => {
+        const top = { id: 'b', w: 1, h: 0.5, d: 1, weight: 50, stop: 1 };
+        const r = dropBox(top, 0, 0, [base], truck);
+        expect(r.ok).toBe(true);
+        expect(r.y).toBe(1);
+    });
+
+    it('recusa sem apoio, sobre frágil, mais pesada ou sem altura', () => {
+        expect(dropBox({ id: 'b', w: 1, h: 0.5, d: 1, weight: 50 }, 0.6, 0, [base], truck).ok).toBe(false); // 40% apoiada
+        expect(dropBox({ id: 'b', w: 1, h: 0.5, d: 1, weight: 50 }, 0, 0, [{ ...base, fragile: true }], truck).problem).toMatch(/frágil/);
+        expect(dropBox({ id: 'b', w: 1, h: 0.5, d: 1, weight: 500 }, 0, 0, [base], truck).problem).toMatch(/pesada/);
+        expect(dropBox({ id: 'b', w: 1, h: 1.5, d: 1, weight: 50 }, 0, 0, [base], truck).problem).toMatch(/altura/);
+    });
+
+    it('não deixa sair do baú e gruda nas bordas', () => {
+        const r = dropBox({ id: 'b', w: 1, h: 1, d: 1, weight: 50 }, 5, -3, [], truck);
+        expect([r.x, r.z]).toEqual([1, 0]);
+        const s = snapXZ(1.05, 0.04, { id: 'b', w: 0.5, d: 0.5 }, [base], truck);
+        expect(s.x).toBeCloseTo(1.02); // encosta na vizinha (com folga)
+        expect(s.z).toBe(0);
+    });
+
+    it('detecta caixa em cima, giro e quebra da regra LIFO', () => {
+        const top = { ...base, id: 'b', y: 1 };
+        expect(boxOnTop(base, [base, top])?.id).toBe('b');
+        expect(turned({ w: 1, d: 2, rotated: false })).toMatchObject({ w: 2, d: 1, rotated: true });
+        const later = { ...base, id: 'c', z: 2, stop: 3 };
+        expect(lifoIssues([base, later])).toHaveLength(1);
+        expect(lifoIssues([{ ...base, stop: 3 }, { ...later, stop: 1 }])).toHaveLength(0);
+    });
+
+    it('assinatura muda quando a carga muda', () => {
+        const items = [{ id: 'a', w: 1, h: 1, d: 1, weight: 100, stop: 1 }];
+        expect(layoutSignature(items, truck)).not.toBe(layoutSignature([{ ...items[0], weight: 90 }], truck));
+    });
+});

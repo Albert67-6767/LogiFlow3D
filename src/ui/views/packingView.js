@@ -2,6 +2,7 @@ import { colorForStop } from '../../config/constants.js';
 import { actions, getDerived, getState, watch } from '../../state/store.js';
 import { createScene } from '../../scene/scene3d.js';
 import { newId } from '../../core/io.js';
+import { lifoIssues } from '../../core/manualLayout.js';
 import { $, h, render } from '../dom.js';
 import { icon } from '../icons.js';
 import { dims, int, UNPLACED_REASON } from '../format.js';
@@ -222,18 +223,21 @@ export function mountPackingView() {
             if (id) document.querySelector(`#items-list li[data-id="${CSS.escape(id)}"]`)?.setAttribute('data-hover', '');
         },
         onSelect: (id) => actions.select(id),
+        onMove: (id, pos) => afterMove(id, pos),
+        onEditMessage: (text, tone) => toast(text, { tone }),
     });
 
     watch(s => [s.theme], (s) => scene.setTheme(s.theme));
     watch((s, d) => [d.truck, s.wallsOpaque], (s, d) => scene.setTruck(d.truck, s.wallsOpaque));
-    watch((s, d) => [s.items, d.truck], (s, d) => {
+    watch((s, d) => [d.packing, d.truck], (s, d) => {
         scene.setBoxes(d.packing.placed, new Map(s.items.map(i => [i.id, i])));
         scene.setCenterOfGravity(d.distribution.cog);
         renderWeightPanel(d.distribution);
         renderLegend(d.stops);
         renderUnplacedAlert(d.packing.unplaced);
     });
-    watch((s, d) => [s.items, d.truck, s.selectedId], renderItemsList);
+    watch((s, d) => [s.items, d.packing, d.truck, s.selectedId], renderItemsList);
+    mountLayoutTools();
     watch(s => [s.selectedId], (s) => {
         scene.setSelected(s.selectedId);
         if (s.selectedId) {
@@ -256,6 +260,70 @@ export function mountPackingView() {
     $('#btn-toggle-items').addEventListener('click', () => openItemsPanel(true));
     $('#btn-close-items').addEventListener('click', () => openItemsPanel(false));
     $('#items-backdrop').addEventListener('click', () => openItemsPanel(false));
+}
+
+// ---------- Arrumação manual (cadeado) ----------
+const itemLabel = (id) => getState().items.find(i => i.id === id)?.label ?? 'Caixa';
+
+/** Depois de mover: avisa se alguma entrega ficou bloqueada (regra LIFO). */
+function afterMove(id, pos) {
+    actions.moveBox(id, pos);
+    const issue = lifoIssues(getDerived().packing.placed).find(i => i.blocker.id === id || i.blocked.id === id);
+    if (issue) {
+        toast(`Atenção: "${itemLabel(issue.blocker.id)}" (parada #${issue.blocker.stop}) ficou na frente de "${itemLabel(issue.blocked.id)}" (parada #${issue.blocked.stop}). Na entrega #${issue.blocked.stop} vai precisar tirar ela antes.`, { tone: 'warn', duration: 9000 });
+    }
+}
+
+function rotateSelected() {
+    const id = getState().selectedId;
+    if (!id) return toast('Toque numa caixa para selecionar e depois em Girar.', { tone: 'warn' });
+    const problem = scene.rotateBox(id);
+    if (problem) toast(problem, { tone: 'warn' });
+}
+
+function mountLayoutTools() {
+    const lockBtn = $('#btn-lock');
+    const tools = $('#layout-tools');
+    lockBtn.addEventListener('click', () => actions.setLayoutUnlocked(!getState().layoutUnlocked));
+
+    watch((s, d) => [s.layoutUnlocked, d.packing, s.selectedId], (s, d) => {
+        const open = s.layoutUnlocked;
+        scene.setEditMode(open);
+        lockBtn.setAttribute('aria-pressed', String(open));
+        render(lockBtn, icon(open ? 'unlock' : 'lock', 'size-3.5'), open ? 'Travar caixas' : 'Destravar caixas');
+        lockBtn.classList.toggle('!text-amber-300', open);
+
+        const manual = !!d.packing.manual;
+        const issues = manual ? lifoIssues(d.packing.placed).length : 0;
+        tools.hidden = !open && !manual;
+        if (tools.hidden) return;
+        render(tools,
+            open
+                ? h('p', { class: 'flex items-start gap-1.5 text-amber-300' }, icon('unlock', 'mt-0.5 size-3.5'),
+                    'Arraste uma caixa para mover. Ela fica vermelha onde não pode (sem apoio, frágil embaixo, sem altura).')
+                : h('p', { class: 'flex items-center gap-1.5 text-slate-300' }, icon('lock', 'size-3.5'), 'Arrumação manual travada.'),
+            issues > 0 && h('p', { class: 'flex items-start gap-1.5 text-amber-300' }, icon('warn', 'mt-0.5 size-3.5'),
+                `${issues} caixa(s) bloqueando entregas anteriores (fora da ordem LIFO).`),
+            h('div', { class: 'flex flex-wrap gap-1.5' },
+                open && h('button', { class: 'btn-subtle', disabled: !s.selectedId, onclick: rotateSelected, title: 'Girar a caixa selecionada (tecla R)' },
+                    icon('rotate-cw', 'size-3.5'), 'Girar'),
+                manual && h('button', { class: 'btn-subtle', onclick: () => {
+                    const undo = actions.resetLayout();
+                    toast('Voltou para a arrumação automática.', { action: { label: 'Desfazer', run: undo } });
+                } }, icon('refresh', 'size-3.5'), 'Arrumação automática'),
+                open && h('button', { class: 'btn-subtle !text-emerald-300', onclick: () => actions.setLayoutUnlocked(false) },
+                    icon('lock', 'size-3.5'), 'Travar'),
+            ),
+        );
+    });
+
+    // Tecla R gira a caixa selecionada (só com o cadeado aberto e fora de campos de texto).
+    window.addEventListener('keydown', (e) => {
+        if (!getState().layoutUnlocked || getState().activeTab !== 'packing') return;
+        if (e.target.closest?.('input, textarea, select, [contenteditable]')) return;
+        if (e.key === 'r' || e.key === 'R') { e.preventDefault(); rotateSelected(); }
+        if (e.key === 'Escape') actions.setLayoutUnlocked(false);
+    });
 }
 
 // ---------- Primeira pessoa ----------

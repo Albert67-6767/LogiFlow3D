@@ -1,6 +1,6 @@
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { MAP_SERVICES, RISK_LEVELS, colorForStop } from '../../config/constants.js';
+import { MAP_SERVICES, RISK_LEVELS, ROAD_BLOCK, colorForStop } from '../../config/constants.js';
 import { h } from '../dom.js';
 import { icon } from '../icons.js';
 import { num } from '../format.js';
@@ -53,7 +53,7 @@ export function attachBaseLayers(map, el) {
     };
 }
 
-export function createRouteMap(el, { onPick, onChooseAlt, onAreaClick } = {}) {
+export function createRouteMap(el, { onPick, onChooseAlt, onAreaClick, onBlockClick } = {}) {
     const map = L.map(el, { center: DEFAULT_VIEW.center, zoom: DEFAULT_VIEW.zoom, zoomControl: true });
     let picking = false;
     let fitted = false;
@@ -70,7 +70,7 @@ export function createRouteMap(el, { onPick, onChooseAlt, onAreaClick } = {}) {
 
     const { setTheme, setStyle } = attachBaseLayers(map, el);
 
-    function update({ depot, stops, legs, areas }) {
+    function update({ depot, stops, legs, areas, heavy = false, blocks = [] }) {
         Object.values(layers).forEach(l => l.clearLayers());
         const bounds = L.latLngBounds([]);
 
@@ -102,8 +102,20 @@ export function createRouteMap(el, { onPick, onChooseAlt, onAreaClick } = {}) {
             // Destaque de piso: vermelho = terra/cascalho, âmbar = irregular
             alt.segments?.fair?.forEach(seg => L.polyline(seg, { color: '#f59e0b', weight: 5, dashArray: '2 6', interactive: false }).addTo(layers.chosen));
             alt.segments?.bad?.forEach(seg => L.polyline(seg, { color: '#ef4444', weight: 6, dashArray: '2 6', interactive: false }).addTo(layers.chosen));
+            // Caminhão: roxo = rua estreita (viela, acesso ou faixa única)
+            if (heavy) alt.segments?.narrow?.forEach(seg => L.polyline(seg, { color: '#a855f7', weight: 6, dashArray: '1 7' })
+                .bindTooltip('Rua estreita para caminhão', { sticky: true }).addTo(layers.chosen));
             alt.shape.forEach(p => bounds.extend(p));
         });
+
+        // Ruas sem passagem (observações dos motoristas)
+        for (const b of blocks) {
+            const faded = b.scope === 'truck' && !heavy; // não vale para o veículo atual
+            L.marker([b.lat, b.lon], { icon: pin(icon('ban', 'size-3.5'), faded ? '#64748b' : '#dc2626', 24), zIndexOffset: 800 })
+                .bindTooltip(tip(b.reason, b.note, `${ROAD_BLOCK.scopes[b.scope]}${faded ? ' (não vale para este veículo)' : ''}`, 'Toque para editar'))
+                .on('click', () => { if (!picking) onBlockClick?.(b.id); })
+                .addTo(layers.markers);
+        }
 
         // Marcadores
         if (depot) {

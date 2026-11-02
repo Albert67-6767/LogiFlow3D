@@ -7,6 +7,8 @@ import { loadTotals, weightDistribution, groupStops, routeMetrics } from '../cor
 import { addressKey } from '../core/geo.js';
 import { evaluateRoute, profileFor } from '../core/routing.js';
 import { driveTimeFactor } from '../core/navigation.js';
+import { sanitizeBlocks } from '../core/roadBlocks.js';
+import { layoutSignature } from '../core/manualLayout.js';
 
 /*
  * Fonte única de verdade. Toda mudança passa por setState(); as telas usam
@@ -17,7 +19,8 @@ import { driveTimeFactor } from '../core/navigation.js';
 const STORAGE_KEY = 'logiflow3d:v2';
 const PERSISTED = [
     'trucks', 'truckKey', 'items', 'stopKm', 'settings', 'wallsOpaque', 'activeTab',
-    'theme', 'mapStyle', 'depot', 'riskAreas', 'geo', 'routePlan', 'deliveries', 'products',
+    'theme', 'mapStyle', 'depot', 'riskAreas', 'roadBlocks', 'geo', 'routePlan', 'deliveries', 'products',
+    'manualLayout',
 ];
 
 const systemTheme = () => (globalThis.matchMedia?.('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
@@ -42,6 +45,9 @@ function initialState() {
         theme: systemTheme(),
         mapStyle: 'map', // 'map' (ruas) ou 'satellite'
         riskAreas: [],
+        manualLayout: null,   // caixas movidas à mão: { sig, boxes } (vale enquanto a carga não mudar)
+        layoutUnlocked: false, // cadeado do 3D aberto (não é salvo)
+        roadBlocks: [],  // observações "não dá para passar" dos motoristas
         geo: {},          // posição de cada endereço já localizado (chave: addressKey)
         routePlan: null,  // caminhos buscados no serviço de rotas
         routeStatus: { busy: false, message: '' }, // não é salvo
@@ -57,6 +63,7 @@ function initialState() {
         }
         if (saved?.theme === 'light' || saved?.theme === 'dark') base.theme = saved.theme;
         if (!Array.isArray(base.riskAreas)) base.riskAreas = [];
+        base.roadBlocks = sanitizeBlocks(base.roadBlocks, newId);
         if (!base.geo || typeof base.geo !== 'object') base.geo = {};
         if (!base.deliveries || typeof base.deliveries !== 'object') base.deliveries = {};
         base.products = catalog.sanitizeProducts(base.products);
@@ -68,6 +75,7 @@ function initialState() {
 let state = initialState();
 let derived = null;
 let packCache = { items: null, truck: null, result: null };
+let layoutCache = { auto: null, manual: null, result: null };
 let routeCache = { deps: [], result: null };
 const watchers = new Set();
 let saveTimer = null;
@@ -76,9 +84,17 @@ function computeDerived(s) {
     // Referência estável: só muda ao trocar de veículo ou editar o veículo atual.
     const truck = s.trucks[s.truckKey];
     if (packCache.items !== s.items || packCache.truck !== truck) {
-        packCache = { items: s.items, truck, result: packCargo(s.items, truck) };
+        packCache = { items: s.items, truck, result: packCargo(s.items, truck), sig: layoutSignature(s.items, truck) };
     }
-    const packing = packCache.result;
+    // Arrumação manual (se ainda vale para esta carga e este baú) substitui a automática.
+    if (layoutCache.auto !== packCache.result || layoutCache.manual !== s.manualLayout) {
+        const manual = s.manualLayout?.sig === packCache.sig ? s.manualLayout : null;
+        layoutCache = {
+            auto: packCache.result, manual: s.manualLayout,
+            result: manual ? { ...packCache.result, placed: manual.boxes, manual: true } : packCache.result,
+        };
+    }
+    const packing = layoutCache.result;
 
     // Paradas com posição no mapa (quando o endereço já foi localizado).
     const stops = groupStops(s.items, s.stopKm).map(st => {
@@ -254,6 +270,24 @@ export const actions = {
     setTab(activeTab) {
         setState({ activeTab });
     },
+    // ----- Arrumação manual (cadeado do 3D) -----
+    setLayoutUnlocked(layoutUnlocked) {
+        setState({ layoutUnlocked: !!layoutUnlocked });
+    },
+    /** Grava a nova posição de uma caixa (já validada pela cena). */
+    moveBox(id, pos) {
+        const { placed } = derived.packing;
+        const boxes = placed.map(p => (p.id === id
+            ? { ...p, x: pos.x, y: pos.y, z: pos.z, w: pos.w, d: pos.d, rotated: !!pos.rotated }
+            : p));
+        setState({ manualLayout: { sig: packCache.sig, boxes } });
+    },
+    /** Volta para a arrumação automática. Retorna função de desfazer. */
+    resetLayout() {
+        const previous = state.manualLayout;
+        setState({ manualLayout: null });
+        return () => setState({ manualLayout: previous });
+    },
     toggleWalls() {
         setState(s => ({ wallsOpaque: !s.wallsOpaque }));
     },
@@ -272,6 +306,7 @@ export const actions = {
             settings: { ...DEFAULT_SETTINGS, ...project.settings },
             depot: project.depot ?? s.depot,
             riskAreas: project.riskAreas ?? s.riskAreas,
+            roadBlocks: project.roadBlocks ?? s.roadBlocks,
             geo: { ...s.geo, ...project.geo },
             products: project.products ? { ...s.products, ...project.products } : s.products,
             selectedId: null,
@@ -325,6 +360,27 @@ export const actions = {
             const list = [...s.riskAreas];
             list.splice(Math.min(index, list.length), 0, removed);
             return { riskAreas: list };
+        });
+    },
+    /** Observação de rua sem passagem. Retorna o id. */
+    addRoadBlock(data) {
+        const block = { id: newId(), scope: 'truck', note: '', ...data, at: Date.now() };
+        setState(s => ({ roadBlocks: [...s.roadBlocks, block] }));
+        return block.id;
+    },
+    updateRoadBlock(id, patch) {
+        setState(s => ({ roadBlocks: s.roadBlocks.map(b => (b.id === id ? { ...b, ...patch } : b)) }));
+    },
+    /** Remove uma observação. Retorna função de desfazer. */
+    removeRoadBlock(id) {
+        const index = state.roadBlocks.findIndex(b => b.id === id);
+        if (index < 0) return null;
+        const removed = state.roadBlocks[index];
+        setState(s => ({ roadBlocks: s.roadBlocks.filter(b => b.id !== id) }));
+        return () => setState(s => {
+            const list = [...s.roadBlocks];
+            list.splice(Math.min(index, list.length), 0, removed);
+            return { roadBlocks: list };
         });
     },
     setRoutePlan(routePlan) {

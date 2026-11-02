@@ -3,6 +3,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { colorForStop } from '../config/constants.js';
 import { buildCabin } from './cabin.js';
 import { createFirstPerson } from './firstPerson.js';
+import { boxOnTop, dropBox, snapXZ, turned } from '../core/manualLayout.js';
 
 /*
  * Cena 3D do baú. Recebe dados já calculados (posições do packer) e só desenha.
@@ -14,16 +15,16 @@ import { createFirstPerson } from './firstPerson.js';
 
 const THEMES = {
     dark: {
-        background: 0x020617, grid: [0x334155, 0x1e293b], ground: 0x1e293b,
-        wall: 0x0284c7, wallEdge: 0x38bdf8, floor: 0x334155, cabin: 0x1e293b,
-        door: 0x10b981, doorLabel: "#34d399", cabinLabel: "#94a3b8",
+        background: 0x16161b, grid: [0x363c48, 0x2a2d35], ground: 0x2a2d35,
+        wall: 0x00a3e0, wallEdge: 0x29b8ea, floor: 0x363c48, cabin: 0x2a2d35,
+        door: 0x8cc63f, doorLabel: "#9fd05a", cabinLabel: "#8d98a8",
         cabinBody: 0x64748b, glass: 0x0b1220, trim: 0x111827, tire: 0x0a0a0a, rim: 0x9ca3af,
-        edge: 0x020617, edgeFragile: 0xfbbf24, edgeSelected: 0xffffff, cog: 0xef4444,
+        edge: 0x16161b, edgeFragile: 0xfbbf24, edgeSelected: 0xffffff, cog: 0xef4444,
     },
     light: {
-        background: 0xf1f5f9, grid: [0xcbd5e1, 0xe2e8f0], ground: 0xcbd5e1,
-        wall: 0x0284c7, wallEdge: 0x0369a1, floor: 0x94a3b8, cabin: 0x64748b,
-        door: 0x059669, doorLabel: "#047857", cabinLabel: "#475569",
+        background: 0xf2f4f7, grid: [0xb1b9c5, 0xd3d8df], ground: 0xd3d8df,
+        wall: 0x00a3e0, wallEdge: 0x0086b8, floor: 0x8d98a8, cabin: 0x5f6e83,
+        door: 0x71a52f, doorLabel: "#578025", cabinLabel: "#4a5566",
         cabinBody: 0xf8fafc, glass: 0x1e293b, trim: 0x334155, tire: 0x1f2937, rim: 0xd1d5db,
         edge: 0x0f172a, edgeFragile: 0xd97706, edgeSelected: 0x0f172a, cog: 0xdc2626,
     },
@@ -65,7 +66,7 @@ function makeLabel(text, color) {
     return sprite;
 }
 
-export function createScene(container, { onHover, onSelect } = {}) {
+export function createScene(container, { onHover, onSelect, onMove, onEditMessage } = {}) {
     const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: false });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.domElement.setAttribute('aria-label', 'Visualização 3D do baú. Arraste para girar, role para aproximar.');
@@ -129,6 +130,9 @@ export function createScene(container, { onHover, onSelect } = {}) {
     let firstPerson = null; // criado mais abaixo
     let hoveredId = null;
     let selectedId = null;
+    let placedNow = [];     // posições atuais (para validar o arraste)
+    let editMode = false;   // cadeado aberto: dá para arrastar as caixas
+    let drag = null;
     let active = true;
     let pending = false;
 
@@ -215,6 +219,8 @@ export function createScene(container, { onHover, onSelect } = {}) {
 
     function setBoxes(placed, itemsById) {
         firstPerson?.boxesChanged();
+        drag = null;
+        placedNow = placed;
         clearGroup(boxGroup);
         if (!truck) return;
         for (const p of placed) {
@@ -255,7 +261,8 @@ export function createScene(container, { onHover, onSelect } = {}) {
             const id = mesh.userData.id;
             const isSel = id === selectedId;
             const isHover = id === hoveredId;
-            mesh.material.emissive.setHex(isSel ? 0x3a3a3a : isHover ? 0x222222 : 0x000000);
+            const invalid = drag?.moved && drag.id === id && !drag.pos.ok;
+            mesh.material.emissive.setHex(invalid ? 0x991b1b : isSel ? 0x3a3a3a : isHover ? 0x222222 : 0x000000);
             const edge = mesh.children[0];
             edge.material = isSel ? edgeMats.selected : mesh.userData.fragile ? edgeMats.fragile : edgeMats.normal;
         }
@@ -331,10 +338,112 @@ export function createScene(container, { onHover, onSelect } = {}) {
         return hit ? hit.object.userData.id : null;
     }
 
-    renderer.domElement.addEventListener('pointermove', (e) => {
+    // ---------- Arrastar caixas (cadeado aberto) ----------
+    const canvas = renderer.domElement;
+    const dragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+    const hitPoint = new THREE.Vector3();
+    const meshOf = (id) => boxGroup.children.find(m => m.userData.id === id);
+
+    function placeMesh(mesh, p) {
+        mesh.scale.set(p.w, p.h, p.d);
+        mesh.position.set(-truck.w / 2 + p.x + p.w / 2, p.y + p.h / 2, -truck.d / 2 + p.z + p.d / 2);
+    }
+
+    /** Ponto do piso (coordenadas do baú) sob o ponteiro, na altura do plano de arraste. */
+    function floorPoint(e) {
+        const rect = canvas.getBoundingClientRect();
+        pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+        pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+        raycaster.setFromCamera(pointer, camera);
+        if (!raycaster.ray.intersectPlane(dragPlane, hitPoint)) return null;
+        return { x: hitPoint.x + truck.w / 2, z: hitPoint.z + truck.d / 2 };
+    }
+
+    // Captura: roda antes da órbita da câmera e a impede de girar enquanto arrasta a caixa.
+    canvas.addEventListener('pointerdown', (e) => {
+        if (!editMode || !truck || firstPerson?.isActive() || e.button > 0) return;
+        const id = pick(e);
+        const box = id && placedNow.find(p => p.id === id);
+        if (!box) return;
+        e.stopImmediatePropagation();
+        canvas.setPointerCapture(e.pointerId);
+        dragPlane.constant = -box.y; // plano horizontal na base da caixa
+        const start = floorPoint(e);
+        if (!start) return;
+        drag = { id, box, start: { x: e.clientX, y: e.clientY }, offset: { x: start.x - box.x, z: start.z - box.z }, moved: false, pos: { ...box, ok: true } };
+        onSelect?.(id);
+    }, { capture: true });
+
+    canvas.addEventListener('pointermove', (e) => {
+        if (!drag) return;
+        e.stopImmediatePropagation();
+        if (!drag.moved && Math.hypot(e.clientX - drag.start.x, e.clientY - drag.start.y) < 5) return;
+        if (!drag.moved) {
+            const top = boxOnTop(drag.box, placedNow);
+            if (top) { onEditMessage?.('Tem outra caixa em cima desta. Mova a de cima primeiro.', 'warn'); drag = null; return; }
+        }
+        drag.moved = true;
+        const p = floorPoint(e);
+        if (!p) return;
+        const others = placedNow.filter(o => o.id !== drag.id);
+        const snapped = snapXZ(p.x - drag.offset.x, p.z - drag.offset.z, drag.box, others, truck);
+        drag.pos = dropBox(drag.box, snapped.x, snapped.z, others, truck);
+        const mesh = meshOf(drag.id);
+        if (mesh) placeMesh(mesh, drag.pos);
+        canvas.style.cursor = drag.pos.ok ? 'grabbing' : 'not-allowed';
+        applyHighlights();
+    }, { capture: true });
+
+    function endDrag(e, cancelled = false) {
+        if (!drag) return;
+        e.stopImmediatePropagation();
+        const d = drag;
+        drag = null;
+        canvas.style.cursor = 'move';
+        if (!d.moved) { applyHighlights(); return; }
+        if (!cancelled && d.pos.ok) {
+            onMove?.(d.id, d.pos);
+        } else {
+            const mesh = meshOf(d.id);
+            if (mesh) placeMesh(mesh, d.box); // volta para onde estava
+            if (!cancelled) onEditMessage?.(d.pos.problem, 'warn');
+        }
+        applyHighlights();
+    }
+    canvas.addEventListener('pointerup', (e) => endDrag(e), { capture: true });
+    canvas.addEventListener('pointercancel', (e) => endDrag(e, true), { capture: true });
+
+    function setEditMode(on) {
+        editMode = !!on;
+        if (!editMode && drag) {
+            const mesh = meshOf(drag.id);
+            if (mesh) placeMesh(mesh, drag.box);
+            drag = null;
+        }
+        canvas.style.cursor = editMode ? 'move' : 'grab';
+        applyHighlights();
+    }
+
+    /** Gira a caixa 90° no lugar. Retorna a mensagem de erro ou null. */
+    function rotateBox(id) {
+        const box = placedNow.find(p => p.id === id);
+        if (!box || !truck) return 'Selecione uma caixa.';
+        if (boxOnTop(box, placedNow)) return 'Tem outra caixa em cima desta. Mova a de cima primeiro.';
+        const t = turned(box);
+        const others = placedNow.filter(o => o.id !== id);
+        // Gira em torno do centro; se não couber, tenta encostar nas paredes.
+        const cx = box.x + box.w / 2 - t.w / 2, cz = box.z + box.d / 2 - t.d / 2;
+        for (const [x, z] of [[cx, cz], [box.x, box.z]]) {
+            const pos = dropBox(t, x, z, others, truck);
+            if (pos.ok) { onMove?.(id, pos); return null; }
+        }
+        return dropBox(t, cx, cz, others, truck).problem;
+    }
+
+    canvas.addEventListener('pointermove', (e) => {
         if (e.buttons || firstPerson?.isActive()) return; // arrastando a câmera / mira no centro em primeira pessoa
         const id = pick(e);
-        renderer.domElement.style.cursor = id ? 'pointer' : 'grab';
+        renderer.domElement.style.cursor = id ? (editMode ? 'move' : 'pointer') : 'grab';
         setHovered(id);
         onHover?.(id, e.clientX, e.clientY);
     });
@@ -392,7 +501,7 @@ export function createScene(container, { onHover, onSelect } = {}) {
     }
 
     return {
-        setTruck, setBoxes, setCenterOfGravity, setHovered, setSelected,
+        setTruck, setBoxes, setCenterOfGravity, setHovered, setSelected, setEditMode, rotateBox,
         fitCamera, setActive, snapshot, requestRender, setTheme,
         enterFirstPerson: () => firstPerson.enter(),
         exitFirstPerson: () => firstPerson.exit(),

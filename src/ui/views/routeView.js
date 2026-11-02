@@ -1,7 +1,8 @@
-import { PRIORITIES, RISK_LEVELS, colorForStop } from '../../config/constants.js';
+import { PRIORITIES, RISK_LEVELS, ROAD_BLOCK, colorForStop } from '../../config/constants.js';
 import { actions, getDerived, getState, setState, watch } from '../../state/store.js';
 import { addressKey, suggestOrder } from '../../core/geo.js';
 import { QUALITY_LABELS } from '../../core/routing.js';
+import { blocksFor, blocksVersion } from '../../core/roadBlocks.js';
 import { toNumber } from '../../core/validation.js';
 import { planRoute, areasVersion } from '../../services/planner.js';
 import { $, h, render } from '../dom.js';
@@ -11,10 +12,11 @@ import { toast } from '../toast.js';
 import { keepFocus } from './keepFocus.js';
 import { createRouteMap } from './routeMap.js';
 import { openAreaDialog, mountAreaDialog } from './areaDialog.js';
+import { openBlockDialog } from './blockDialog.js';
 import { startNavigation } from './navigationView.js';
 
 let map = null;
-let pickMode = null; // { type: 'depot' | 'stop' | 'area', address?, label }
+let pickMode = null; // { type: 'depot' | 'stop' | 'area' | 'block', address?, label }
 const openLegs = new Set(); // trechos com a lista de caminhos aberta
 
 const QUALITY_COLORS = { good: 'bg-emerald-500', fair: 'bg-amber-500', bad: 'bg-red-500', unknown: 'bg-slate-600' };
@@ -46,6 +48,8 @@ function handlePick(p) {
         toast(`Parada #${mode.stop} marcada no mapa.`, { tone: 'ok' });
     } else if (mode.type === 'area') {
         openAreaDialog({ at: p });
+    } else if (mode.type === 'block') {
+        openBlockDialog({ at: p, scope: getDerived().profile === 'truck' ? 'truck' : 'all' });
     }
 }
 
@@ -117,6 +121,8 @@ function controls(s, d) {
     const priority = s.settings.routePriority ?? 'equilibrada';
     const depotOk = !!d.depotPoint;
     const outdatedAreas = s.routePlan?.legs?.some(l => l.alternatives?.length && l.areasVersion !== areasVersion(s.riskAreas));
+    const blocksV = blocksVersion(blocksFor(s.roadBlocks, d.profile));
+    const outdatedBlocks = s.routePlan?.legs?.some(l => l.alternatives?.length && (l.blocksVersion ?? '') !== blocksV);
 
     return h('div', { class: 'card space-y-3 p-4' },
         h('div', {},
@@ -173,6 +179,8 @@ function controls(s, d) {
             icon('warn', 'size-3.5'), 'Algumas paradas mudaram desde o último cálculo. Clique em Recalcular.'),
         outdatedAreas && !status.busy && h('p', { class: 'flex items-center gap-1.5 text-xs text-amber-300' },
             icon('shield', 'size-3.5'), 'Áreas de atenção mudaram. Recalcule para procurar desvios.'),
+        outdatedBlocks && !status.busy && h('p', { class: 'flex items-center gap-1.5 text-xs text-amber-300' },
+            icon('ban', 'size-3.5'), 'Há observações novas de ruas sem passagem. Recalcule para desviar delas.'),
     );
 }
 
@@ -199,10 +207,28 @@ function summary(s, d) {
                 `${num(t.riskKm)} km em áreas de atenção: ${t.areas.join(', ')}.`)
             : s.riskAreas.length > 0 && h('p', { class: 'flex items-center gap-1.5 text-xs text-emerald-400' }, icon('ok', 'size-3.5'),
                 'A rota não passa por nenhuma área de atenção.')),
+        calculated && truckNote(ev),
         !calculated && route.missingKm > 0 && h('p', { class: 'flex items-center gap-2 text-xs text-slate-400' },
             icon('info', 'size-3.5'), 'Calcule a rota para obter distâncias reais ou digite os km de cada trecho.'),
         deliverySummary(s, d),
     );
+}
+
+/** Como a rota tratou as restrições de caminhão. */
+function truckNote(ev) {
+    const t = ev.totals;
+    if (!ev.heavy) {
+        return h('p', { class: 'flex items-start gap-1.5 text-[11px] text-slate-500' }, icon('info', 'mt-0.5 size-3.5'),
+            'Veículo leve: rota calculada como carro (sem restrições de caminhão).');
+    }
+    if (t.carOnly) {
+        return h('p', { class: 'flex items-start gap-1.5 text-xs text-red-300' }, icon('warn', 'mt-0.5 size-3.5'),
+            `${t.carOnly} trecho(s) sem caminho liberado para caminhão: usando o caminho de carro. Confira proibições e limites de altura/peso.`);
+    }
+    return h('p', { class: `flex items-start gap-1.5 text-xs ${t.narrowKm > 0.03 ? 'text-amber-300' : 'text-emerald-400'}` },
+        icon(t.narrowKm > 0.03 ? 'warn' : 'ok', 'mt-0.5 size-3.5'),
+        'Rota para caminhão: evita ruas com proibição de caminhão e limite de altura, largura ou peso menor que o veículo',
+        t.narrowKm > 0.03 ? `. Ainda passa por ${num(t.narrowKm)} km de ruas estreitas (em roxo no mapa).` : '.');
 }
 
 function locationChip(st, s) {
@@ -222,6 +248,7 @@ function altRow(leg, alt) {
         alt.index === leg.best && 'melhor nota',
         alt.index === leg.shortest && 'mais curto',
         alt.detour && 'desvio',
+        leg.heavy && !alt.carOnly && 'liberado p/ caminhão',
     ].filter(Boolean);
     return h('li', { class: `flex items-center gap-2 rounded-lg border p-2 text-xs ${chosen ? 'border-emerald-500/40 bg-emerald-500/5' : 'border-slate-800'}` },
         h('div', { class: 'min-w-0 flex-1' },
@@ -230,7 +257,9 @@ function altRow(leg, alt) {
             h('p', { class: 'mt-0.5 font-mono text-[11px] text-slate-400' },
                 `${num(alt.km)} km · ${duration(alt.min)}`,
                 alt.surface.bad > 0.05 && ` · ${num(alt.surface.bad)} km sem asfalto`,
-                alt.risk.km > 0.02 && ` · ${num(alt.risk.km)} km em áreas`),
+                alt.risk.km > 0.02 && ` · ${num(alt.risk.km)} km em áreas`,
+                leg.heavy && alt.narrowKm > 0.03 && ` · ${num(alt.narrowKm)} km em ruas estreitas`,
+                leg.heavy && alt.carOnly && ' · caminho de carro'),
             alt.streets?.length > 0 && h('p', { class: 'truncate text-[11px] text-slate-500' }, `Via ${alt.streets.join(', ')}`),
             qualityBar(alt.surface, 'mt-1 h-1'),
         ),
@@ -375,12 +404,39 @@ function areasCard(s) {
     );
 }
 
+const shortDate = (ms) => new Date(ms).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+
+/** Observações dos motoristas: ruas onde o veículo não passou. */
+function blocksCard(s) {
+    const list = [...s.roadBlocks].sort((a, b) => b.at - a.at);
+    return h('div', { class: 'card space-y-2 p-4' },
+        h('div', { class: 'flex items-center justify-between gap-2' },
+            h('h3', { class: 'flex items-center gap-1.5 text-sm font-semibold text-slate-200' }, icon('ban', 'size-4 text-red-400'), 'Ruas sem passagem'),
+            h('button', { class: 'btn-subtle', onclick: () => setPick({ type: 'block', label: 'Toque na rua onde não dá para passar' }) },
+                icon('plus', 'size-3.5'), 'Marcar no mapa'),
+        ),
+        h('p', { class: 'text-[11px] leading-snug text-slate-500' },
+            'Observações dos motoristas (botão "Não passa" na navegação) ou marcadas aqui. As próximas rotas desviam desses pontos.'),
+        list.length === 0
+            ? h('p', { class: 'rounded-lg border border-dashed border-slate-800 p-3 text-center text-xs text-slate-500' }, 'Nenhuma observação ainda.')
+            : h('ul', { class: 'space-y-1' }, list.map(b => h('li', { class: 'flex items-start gap-2 rounded-lg px-1 py-1 text-xs hover:bg-slate-800/50' },
+                icon('ban', 'mt-0.5 size-3.5 text-red-400'),
+                h('button', { class: 'min-w-0 flex-1 text-left', onclick: () => map.focus(b, 17), title: 'Ver no mapa' },
+                    h('p', { class: 'font-medium text-slate-200' }, b.reason),
+                    b.note && h('p', { class: 'text-slate-400' }, b.note),
+                    h('p', { class: 'text-[10px] text-slate-500' }, `${ROAD_BLOCK.scopes[b.scope]} · ${shortDate(b.at)}`)),
+                h('button', { class: 'icon-btn p-1', 'aria-label': `Editar observação: ${b.reason}`, onclick: () => openBlockDialog({ id: b.id }) }, icon('pencil', 'size-3.5')),
+            ))),
+    );
+}
+
 export function mountRouteView() {
     mountAreaDialog();
     map = createRouteMap($('#route-map'), {
         onPick: handlePick,
         onChooseAlt: (key, idx) => actions.chooseAlternative(key, idx),
         onAreaClick: (id) => openAreaDialog({ id }),
+        onBlockClick: (id) => openBlockDialog({ id }),
     });
     $('#btn-fit-map').addEventListener('click', () => map.fit());
 
@@ -399,20 +455,23 @@ export function mountRouteView() {
     });
 
     // Mapa: só redesenha quando a geometria muda.
-    watch((s, d) => [d.routeEval, s.riskAreas, s.depot, s.geo, s.items], (s, d) => map.update({
+    watch((s, d) => [d.routeEval, s.riskAreas, s.roadBlocks, s.depot, s.geo, s.items], (s, d) => map.update({
         depot: d.depotPoint && { ...d.depotPoint, address: s.depot.address },
         stops: d.stops,
         legs: d.routeEval.legs,
         areas: s.riskAreas,
+        heavy: d.profile === 'truck',
+        blocks: s.roadBlocks,
     }));
 
     // Painel
-    watch((s, d) => [s.items, s.geo, s.depot, s.riskAreas, d.routeEval, s.settings, d.truck, s.routeStatus, s.stopKm, s.deliveries], (s, d) => keepFocus(() => {
+    watch((s, d) => [s.items, s.geo, s.depot, s.riskAreas, s.roadBlocks, d.routeEval, s.settings, d.truck, s.routeStatus, s.stopKm, s.deliveries], (s, d) => keepFocus(() => {
         render($('#route-controls'), controls(s, d));
         render($('#route-summary'), summary(s, d));
         render($('#route-stops'), d.stops.length === 0
             ? h('li', { class: 'card p-8 text-center text-sm text-slate-400' }, 'Nenhuma parada. Adicione cargas para montar a rota.')
             : d.stops.map((st, i) => stopCard(st, i, s, d)));
         render($('#risk-areas'), areasCard(s));
+        render($('#road-blocks'), blocksCard(s));
     }));
 }

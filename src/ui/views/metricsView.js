@@ -33,7 +33,7 @@ const section = (title, ...children) => h('section', { class: 'space-y-3' },
     h('h2', { class: 'text-sm font-semibold text-slate-300' }, title), ...children);
 
 export function mountMetricsView() {
-    watch((s, d) => [s.items, s.stopKm, d.truck, s.settings], (s, d) => keepFocus(() => {
+    watch((s, d) => [s.items, d.packing, s.stopKm, d.truck, s.settings], (s, d) => keepFocus(() => {
         const { route, totals, distribution, truck, packing } = d;
         const sv = route.savings;
         const co2Factor = CO2_PER_LITER[truck.fuel];

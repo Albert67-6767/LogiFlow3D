@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <!-- Cubo de vidro -->
+  <path d="M32 4 56 17v28L32 58 8 45V17z" fill="#ffffff" fill-opacity=".06"/>
+  <path d="M32 4 56 17 32 30 8 17z" fill="#ffffff" fill-opacity=".10"/>
+  <!-- L azul (face esquerda) -->
+  <g transform="matrix(1 .5417 0 1 8 17)">
+    <path d="M4 3h5.5v14.5H18V23H4z" fill="#006a92" transform="translate(-1.4 -.6)"/>
+    <path d="M4 3h5.5v14.5H18V23H4z" fill="#00a3e0"/>
+    <path d="M4 3h5.5v1.6H4z" fill="#8fdbf5"/>
+  </g>
+  <!-- F verde (face direita) -->
+  <g transform="matrix(1 -.5417 0 1 32 30)">
+    <path d="M5 3h14v5H10.5v3.5h6.5v4.5h-6.5V23H5z" fill="#578025" transform="translate(1.4 -.6)"/>
+    <path d="M5 3h14v5H10.5v3.5h6.5v4.5h-6.5V23H5z" fill="#8cc63f"/>
+    <path d="M5 3h14v1.6H5z" fill="#cce6a3"/>
+  </g>
+  <!-- Arestas -->
+  <path d="M32 4 56 17v28L32 58 8 45V17zM8 17l24 13 24-13M32 30v28" stroke="#d3d8df" stroke-opacity=".75" stroke-width="1.6" stroke-linejoin="round"/>
+</svg>

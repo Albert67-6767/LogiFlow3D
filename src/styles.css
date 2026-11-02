@@ -1,4 +1,60 @@
 @import "tailwindcss";
+@import "@fontsource/exo-2/400.css";
+@import "@fontsource/exo-2/500.css";
+@import "@fontsource/exo-2/600.css";
+@import "@fontsource/exo-2/700.css";
+
+/*
+ * Identidade LogiFlow 3D:
+ *   azul  #00A3E0 (brand: botões, destaque, navegação)
+ *   verde #8CC63F (emerald remapeado: sucesso, ok, confirmações)
+ *   grafite #1E1E24 e cinza #5F6E83 (slate remapeado: fundos e textos)
+ *   laranja do "3D" no logotipo (accent)
+ * Fonte: Exo 2 (geométrica, embutida no app — funciona sem internet).
+ */
+@theme {
+    --font-sans: "Exo 2", ui-sans-serif, system-ui, sans-serif;
+
+    --color-brand-50: #e6f7fd;
+    --color-brand-100: #c2ebfa;
+    --color-brand-200: #8fdbf5;
+    --color-brand-300: #5ccbf0;
+    --color-brand-400: #29b8ea;
+    --color-brand-500: #00a3e0;
+    --color-brand-600: #0086b8;
+    --color-brand-700: #006a92;
+    --color-brand-800: #004f6d;
+    --color-brand-900: #003549;
+    --color-brand-950: #001f2b;
+
+    --color-emerald-50: #f3f9ea;
+    --color-emerald-100: #e3f1cc;
+    --color-emerald-200: #cce6a3;
+    --color-emerald-300: #b3da7a;
+    --color-emerald-400: #9fd05a;
+    --color-emerald-500: #8cc63f;
+    --color-emerald-600: #71a52f;
+    --color-emerald-700: #578025;
+    --color-emerald-800: #3f5c1c;
+    --color-emerald-900: #2a3e13;
+    --color-emerald-950: #18240a;
+
+    --color-slate-50: #f6f7f9;
+    --color-slate-100: #e9ecf0;
+    --color-slate-200: #d3d8df;
+    --color-slate-300: #b1b9c5;
+    --color-slate-400: #8d98a8;
+    --color-slate-500: #5f6e83;
+    --color-slate-600: #4a5566;
+    --color-slate-700: #363c48;
+    --color-slate-800: #2a2d35;
+    --color-slate-900: #1e1e24;
+    --color-slate-950: #16161b;
+
+    --color-accent-300: #f2a684;
+    --color-accent-400: #ec8c62;
+    --color-accent-500: #e57345;
+}
 
 /*
  * Tema claro: o app foi desenhado com a escala "slate" escura. No tema claro a
@@ -8,41 +64,44 @@
  */
 :root[data-theme="light"] {
     color-scheme: light;
-    --color-slate-50: oklch(12.9% 0.042 264.695);
-    --color-slate-100: oklch(20.8% 0.042 265.755);
-    --color-slate-200: oklch(27.9% 0.041 260.031);
-    --color-slate-300: oklch(37.2% 0.044 257.287);
-    --color-slate-400: oklch(44.6% 0.043 257.281);
-    --color-slate-500: oklch(52% 0.046 257.417);
-    --color-slate-600: oklch(66% 0.04 256.788);
-    --color-slate-700: oklch(86.9% 0.022 252.894);
-    --color-slate-800: oklch(91.5% 0.013 255.508);
-    --color-slate-900: oklch(100% 0 0);
-    --color-slate-950: oklch(96.8% 0.007 247.896);
-    --color-emerald-300: oklch(50.8% 0.118 165.612);
-    --color-emerald-400: oklch(56% 0.13 163.225);
+    --color-slate-50: #121216;
+    --color-slate-100: #1e1e24;
+    --color-slate-200: #2a2d35;
+    --color-slate-300: #3c4350;
+    --color-slate-400: #4f5a6b;
+    --color-slate-500: #5f6e83;
+    --color-slate-600: #8d98a8;
+    --color-slate-700: #d3d8df;
+    --color-slate-800: #e4e8ed;
+    --color-slate-900: #ffffff;
+    --color-slate-950: #f2f4f7;
+    --color-emerald-300: #4f7a1c;
+    --color-emerald-400: #5e8f22;
+    --color-brand-300: #0077a8;
+    --color-brand-400: #0089c0;
+    --color-accent-400: #d0632f;
     --color-amber-300: oklch(52% 0.15 48.998);
     --color-amber-400: oklch(60% 0.17 58.318);
     --color-red-300: oklch(50.5% 0.213 27.518);
     --color-red-400: oklch(55% 0.23 27.325);
     --color-blue-400: oklch(54.6% 0.245 262.881);
-    --scroll-track: oklch(96.8% 0.007 247.896);
+    --scroll-track: #f2f4f7;
     --scroll-thumb: oklch(80% 0.02 252);
 }
 :root {
     color-scheme: dark;
-    --scroll-track: rgb(15 23 42 / 0.6);
-    --scroll-thumb: rgb(51 65 85 / 0.6);
+    --scroll-track: rgb(30 30 36 / 0.6);
+    --scroll-thumb: rgb(54 60 72 / 0.8);
 }
 
 /* Componentes reutilizáveis: mude o visual aqui, não em cada tela. */
 @utility btn {
     @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm transition
-        focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400
+        focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-400
         disabled:cursor-not-allowed disabled:opacity-50;
 }
 @utility btn-primary {
-    @apply btn bg-emerald-500 font-semibold text-emerald-950 shadow-lg shadow-emerald-500/20 hover:brightness-110;
+    @apply btn bg-brand-500 font-semibold text-brand-950 shadow-lg shadow-brand-500/25 hover:brightness-110;
 }
 @utility btn-ghost {
     @apply btn font-medium text-slate-400 hover:bg-slate-800 hover:text-slate-200;
@@ -50,29 +109,29 @@
 @utility btn-subtle {
     @apply inline-flex items-center gap-1.5 rounded-lg border border-slate-700/60 bg-slate-800/50 px-2.5 py-1.5 text-xs font-medium text-slate-300 transition
         hover:border-slate-600 hover:bg-slate-800 hover:text-slate-100
-        focus-visible:outline-2 focus-visible:outline-emerald-400;
+        focus-visible:outline-2 focus-visible:outline-brand-400;
 }
 @utility icon-btn {
     @apply inline-flex items-center justify-center rounded-md p-1.5 text-slate-400 transition pointer-coarse:p-2.5
-        hover:bg-slate-800 hover:text-slate-200 focus-visible:outline-2 focus-visible:outline-emerald-400;
+        hover:bg-slate-800 hover:text-slate-200 focus-visible:outline-2 focus-visible:outline-brand-400;
 }
 @utility seg-btn {
     @apply inline-flex items-center gap-1.5 rounded-lg border border-transparent px-3 py-1.5 text-xs font-medium text-slate-400 transition pointer-coarse:py-2.5
         hover:bg-slate-800 hover:text-slate-200
         aria-pressed:border-slate-700 aria-pressed:bg-slate-800 aria-pressed:text-slate-100
-        focus-visible:outline-2 focus-visible:outline-emerald-400;
+        focus-visible:outline-2 focus-visible:outline-brand-400;
 }
 @utility nav-btn {
     @apply flex w-full items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 text-sm font-medium text-slate-400 transition
         hover:bg-slate-800/60 hover:text-slate-200
-        aria-selected:border-emerald-500/20 aria-selected:bg-emerald-500/10 aria-selected:text-emerald-400
-        focus-visible:outline-2 focus-visible:outline-emerald-400;
+        aria-selected:border-brand-500/25 aria-selected:bg-brand-500/10 aria-selected:text-brand-400
+        focus-visible:outline-2 focus-visible:outline-brand-400;
 }
 @utility truck-option {
     @apply w-full rounded-xl border border-slate-700/60 bg-slate-800/40 p-2.5 text-left transition
         hover:border-slate-600 hover:bg-slate-800
-        aria-checked:border-emerald-500/40 aria-checked:bg-emerald-500/10
-        focus-visible:outline-2 focus-visible:outline-emerald-400;
+        aria-checked:border-brand-500/40 aria-checked:bg-brand-500/10
+        focus-visible:outline-2 focus-visible:outline-brand-400;
 }
 @utility section-title {
     @apply mb-2 px-1 text-[11px] font-semibold uppercase tracking-wider text-slate-500;
@@ -92,7 +151,7 @@
 @utility input {
     /* 16px no celular evita o zoom automático do iPhone ao tocar no campo */
     @apply w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-base text-slate-200 placeholder:text-slate-600 sm:text-sm
-        focus:border-emerald-500 focus:outline-none aria-[invalid=true]:border-red-500;
+        focus:border-brand-500 focus:outline-none aria-[invalid=true]:border-red-500;
 }
 @utility field-hint {
     @apply mt-1 text-[10px] text-slate-500;
@@ -118,7 +177,7 @@
 /* Barra de abas inferior (celular/tablet) */
 @utility tab-btn {
     @apply flex flex-1 flex-col items-center gap-0.5 py-2 text-[11px] font-medium text-slate-400 transition
-        aria-selected:text-emerald-400 focus-visible:outline-2 focus-visible:outline-emerald-400;
+        aria-selected:text-brand-400 focus-visible:outline-2 focus-visible:outline-brand-400;
 }
 
 /* ===== Mapa (Leaflet) acompanhando o tema ===== */

@@ -91,10 +91,14 @@ const post = (path, body) => request(`${MAP_SERVICES.routing}${path}`, {
     body: JSON.stringify(body),
 });
 
-/** Medidas externas aproximadas a partir do baú (o Valhalla evita vias incompatíveis). */
+/**
+ * Medidas externas aproximadas a partir do baú. Com elas o Valhalla evita ruas
+ * com proibição de caminhão e com limite de altura/largura/comprimento/peso menor.
+ */
 function truckOptions(truck) {
     return {
         truck: {
+            use_truck_route: 0.5, // prefere vias indicadas para caminhão, quando houver
             height: +(truck.h + 1.1).toFixed(2),  // baú + chassi
             width: +(truck.w + 0.2).toFixed(2),
             length: +(truck.d + 2.5).toFixed(2),  // baú + cabine
@@ -120,7 +124,7 @@ function maneuversOf(leg, fullLength, maxPoints) {
     }));
 }
 
-async function describeTrip(trip, profile, extra) {
+async function describeTrip(trip, profile, costingOptions, extra) {
     const leg = trip.legs[0];
     const full = decodePolyline(leg.shape, 6);
     const alt = {
@@ -134,36 +138,57 @@ async function describeTrip(trip, profile, extra) {
         const attrs = await throttled('valhalla', () => post('/trace_attributes', {
             encoded_polyline: leg.shape,
             costing: profile,
+            ...(costingOptions ? { costing_options: costingOptions } : {}),
             shape_match: 'edge_walk',
             filters: {
-                attributes: ['edge.surface', 'edge.length', 'edge.road_class', 'edge.names', 'edge.begin_shape_index', 'edge.end_shape_index'],
+                attributes: ['edge.surface', 'edge.length', 'edge.road_class', 'edge.names', 'edge.begin_shape_index', 'edge.end_shape_index',
+                    'edge.use', 'edge.lane_count'],
                 action: 'include',
             },
         }));
         summary = summarizeEdges(attrs.edges ?? [], full);
     } catch {
         // Sem detalhes do piso: o caminho continua válido, só sem avaliação de qualidade.
-        summary = { surface: { good: 0, fair: 0, bad: 0, unknown: alt.km }, localKm: 0, streets: [], segments: { bad: [], fair: [] } };
+        summary = { surface: { good: 0, fair: 0, bad: 0, unknown: alt.km }, localKm: 0, narrowKm: 0, streets: [], segments: { bad: [], fair: [], narrow: [] } };
     }
     return {
         ...alt,
         surface: summary.surface,
         localKm: +summary.localKm.toFixed(3),
+        narrowKm: +summary.narrowKm.toFixed(3),
         streets: summary.streets,
         shape: thin(full, 600).map(round),
         maneuvers: maneuversOf(leg, full.length, 600),
         segments: {
             bad: summary.segments.bad.map(s => thin(s, 120).map(round)),
             fair: summary.segments.fair.map(s => thin(s, 120).map(round)),
+            narrow: summary.segments.narrow.map(s => thin(s, 120).map(round)),
         },
     };
 }
 
+/** "Nenhum caminho encontrado" do Valhalla (442 e vizinhos, ou 171 sem caminho). */
+const noPath = (err) => err.status === 400 && (err.code === 442 || err.code === 171 || /no path|path could not/i.test(err.message));
+
 /**
  * Busca até 3 caminhos entre dois pontos. Com `avoid` (polígonos [[lon,lat],...]),
- * busca um único caminho que desvia dessas áreas.
+ * busca um único caminho que desvia dessas áreas. `blocks` (polígonos) são ruas
+ * sem passagem que todo caminho deve evitar.
+ * Caminhão sem nenhum caminho liberado: busca o caminho de carro e marca `carOnly`
+ * (a tela avisa para conferir as restrições).
  */
-export async function fetchAlternatives(from, to, { profile = 'auto', truck, avoid = null, alternates = 2 } = {}) {
+export async function fetchAlternatives(from, to, { profile = 'auto', truck, avoid = null, blocks = [], alternates = 2 } = {}) {
+    try {
+        return await fetchProfile(from, to, { profile, truck, avoid, blocks, alternates });
+    } catch (err) {
+        if (profile !== 'truck' || avoid || !noPath(err)) throw err;
+        const out = await fetchProfile(from, to, { profile: 'auto', truck, avoid, blocks, alternates: 0 });
+        return out.map(a => ({ ...a, carOnly: true }));
+    }
+}
+
+async function fetchProfile(from, to, { profile, truck, avoid, blocks, alternates }) {
+    const options = profile === 'truck' && truck ? truckOptions(truck) : null;
     const body = {
         locations: [{ lat: from.lat, lon: from.lon }, { lat: to.lat, lon: to.lon }],
         costing: profile,
@@ -172,12 +197,14 @@ export async function fetchAlternatives(from, to, { profile = 'auto', truck, avo
         units: 'kilometers',
         alternates: avoid ? 0 : alternates,
     };
-    if (profile === 'truck' && truck) body.costing_options = truckOptions(truck);
-    if (avoid?.length) body.exclude_polygons = avoid;
+    if (options) body.costing_options = options;
+    // Áreas de atenção (desvio) + ruas sem passagem marcadas pelos motoristas.
+    const exclude = [...(avoid ?? []), ...(blocks ?? [])];
+    if (exclude.length) body.exclude_polygons = exclude;
 
     const data = await throttled('valhalla', () => post('/route', body));
     const trips = [data.trip, ...(data.alternates ?? []).map(a => a.trip)].filter(Boolean);
     const out = [];
-    for (const trip of trips) out.push(await describeTrip(trip, profile, { detour: !!avoid }));
+    for (const trip of trips) out.push(await describeTrip(trip, profile, options, { detour: !!avoid }));
     return out;
 }

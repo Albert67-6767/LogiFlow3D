@@ -120,6 +120,64 @@ describe('routing', () => {
 
     it('usa perfil de caminhão para veículos pesados', () => {
         expect(profileFor({ payload: 650 })).toBe('auto');
+        expect(profileFor({ payload: 1800 })).toBe('truck'); // VUC também respeita restrições
         expect(profileFor({ payload: 5000 })).toBe('truck');
+        expect(profileFor({ payload: 5000, cabin: 'picape' })).toBe('auto');
+        expect(profileFor({ payload: 800, cabin: 'vuc' })).toBe('truck');
+    });
+
+    it('conta ruas estreitas (viela, faixa única) e marca no mapa', () => {
+        const s = summarizeEdges([
+            { length: 1, road_class: 'primary', lane_count: 2, begin_shape_index: 0, end_shape_index: 1 },
+            { length: 0.1, road_class: 'service_other', use: 'alley', begin_shape_index: 1, end_shape_index: 2 },
+            { length: 0.2, road_class: 'residential', lane_count: 1, begin_shape_index: 2, end_shape_index: 3 },
+            { length: 0.3, road_class: 'residential', lane_count: 2, begin_shape_index: 3, end_shape_index: 4 },
+        ], line(4));
+        expect(s.narrowKm).toBeCloseTo(0.3);
+        expect(s.segments.narrow).toHaveLength(1);
+        expect(s.segments.narrow[0]).toHaveLength(3);
+    });
+
+    it('caminhão evita rua estreita e caminho só de carro', () => {
+        const leg = { key: 'k', alternatives: [
+            alt({ km: 4, narrowKm: 0.5 }),
+            alt({ km: 4.3 }),
+            alt({ km: 3, carOnly: true }),
+        ] };
+        const truck = evaluateLeg(leg, [], 'equilibrada', true);
+        expect(truck.chosen).toBe(1);
+        expect(truck.notes[0]).toMatch(/vielas/);
+        const car = evaluateLeg(leg, [], 'equilibrada', false);
+        expect(car.chosen).toBe(2); // carro não sofre essas restrições
+    });
+});
+
+describe('ruas sem passagem', async () => {
+    const { sanitizeBlocks, blocksFor, blockPolygons, blocksOnShape, blocksVersion } = await import('../src/core/roadBlocks.js');
+    const blocks = sanitizeBlocks([
+        { id: 'a', lat: 0, lon: 0.005, reason: 'Rua estreita demais', scope: 'truck' },
+        { id: 'b', lat: 0, lon: 0.008, reason: 'inventado', scope: 'all', note: 'x'.repeat(300) },
+        { id: 'c', lat: 999, lon: 0 },
+    ], () => 'novo');
+
+    it('valida e normaliza', () => {
+        expect(blocks).toHaveLength(2);
+        expect(blocks[1].reason).toBe('Outro motivo');
+        expect(blocks[1].note).toHaveLength(200);
+    });
+
+    it('carro só considera as que valem para todos', () => {
+        expect(blocksFor(blocks, 'auto').map(b => b.id)).toEqual(['b']);
+        expect(blocksFor(blocks, 'truck')).toHaveLength(2);
+    });
+
+    it('não exclui a origem nem o destino', () => {
+        expect(blockPolygons(blocks, { lat: 0, lon: 0 }, { lat: 0, lon: 0.01 })).toHaveLength(2);
+        expect(blockPolygons(blocks, { lat: 0, lon: 0.005 }, { lat: 0, lon: 0.01 })).toHaveLength(1);
+    });
+
+    it('detecta caminho passando por uma observação e muda a versão', () => {
+        expect(blocksOnShape(line(10), blocks)).toHaveLength(2);
+        expect(blocksVersion(blocks)).not.toBe(blocksVersion(blocks.slice(1)));
     });
 });

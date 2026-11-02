@@ -1,4 +1,5 @@
 import { sanitizeFleet, defaultFleet } from './fleet.js';
+import { sanitizeBlocks } from './roadBlocks.js';
 import { validateItem } from './validation.js';
 import { sanitizeProducts } from './products.js';
 
@@ -22,6 +23,7 @@ export function exportProject(state) {
         settings: state.settings,
         depot: state.depot,
         riskAreas: state.riskAreas,
+        roadBlocks: state.roadBlocks,
         geo: state.geo,
         products: state.products,
     }, null, 2);
@@ -45,6 +47,7 @@ export function importProject(text) {
         settings: data.settings && typeof data.settings === 'object' ? data.settings : {},
         depot: sanitizeDepot(data.depot),
         riskAreas: sanitizeAreas(data.riskAreas),
+        roadBlocks: Array.isArray(data.roadBlocks) ? sanitizeBlocks(data.roadBlocks, newId) : undefined,
         geo: sanitizeGeo(data.geo),
         products: data.products ? sanitizeProducts(data.products) : undefined,
     };
